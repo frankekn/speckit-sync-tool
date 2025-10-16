@@ -433,31 +433,17 @@ cp .claude/commands/.backup/20251016_120000/*.md .claude/commands/
 
 ```
 speckit-sync-tool/
-├── sync-commands-integrated.sh  # 整合版 v2.1.0（推薦）
-├── sync-commands-enhanced.sh    # Phase 1 版本 v1.1.0
-├── sync-commands-v2.sh          # Phase 2 版本 v2.0.0
-├── template-sync.sh             # Phase 3 版本 v2.1.0
-├── sync-commands.sh             # 基礎版本 v1.0.0
-├── batch-sync-all.sh            # 批次處理工具
+├── sync-commands-integrated.sh  # 主工具 v2.1.0（包含所有功能）
+├── batch-sync-all.sh            # 批次處理多個專案
 ├── install.sh                   # 全局安裝腳本
-├── test-phase1.sh               # Phase 1 測試套件
-├── .speckit-sync.json.template  # 配置檔案範本
-├── Makefile.template            # Makefile 範本
 ├── LICENSE                      # MIT 授權
-├── README.md                    # 本文檔
-├── DELIVERY_SUMMARY.md          # 交付檔案總覽
-└── docs/
-    ├── phase1/                  # Phase 1 文檔
-    │   ├── QUICKSTART_v1.1.md
-    │   ├── PHASE1_SUMMARY.md
-    │   └── ...
-    ├── phase2/                  # Phase 2 文檔
-    │   ├── speckit-sync-tool-phase2-architecture.md
-    │   └── ...
-    └── phase3/                  # Phase 3 文檔
-        ├── README.template-sync.md
-        └── ...
+├── README.md                    # 英文文檔
+├── README.zh-TW.md              # 繁體中文文檔（本文檔）
+├── README.zh-CN.md              # 簡體中文文檔
+└── TEST_REPORT_FINAL.md         # 完整測試報告（9/10 測試通過）
 ```
+
+> **注意**：開發版本和階段文檔可在 git 歷史中查看。如需要可使用 `git log` 查看先前版本。
 
 ## 🔧 進階使用
 

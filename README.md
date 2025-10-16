@@ -437,34 +437,17 @@ cp .claude/commands/.backup/20251016_120000/*.md .claude/commands/
 
 ```
 speckit-sync-tool/
-├── sync-commands-integrated.sh  # Integrated v2.1.0 (recommended)
-├── sync-commands-enhanced.sh    # Phase 1 v1.1.0
-├── sync-commands-v2.sh          # Phase 2 v2.0.0
-├── template-sync.sh             # Phase 3 v2.1.0
-├── sync-commands.sh             # Basic v1.0.0
-├── batch-sync-all.sh            # Batch processing tool
+├── sync-commands-integrated.sh  # Main tool v2.1.0 (all features)
+├── batch-sync-all.sh            # Batch processing for multiple projects
 ├── install.sh                   # Global installation script
-├── test-phase1.sh               # Phase 1 test suite
-├── .speckit-sync.json.template  # Config file template
-├── Makefile.template            # Makefile template
 ├── LICENSE                      # MIT License
-├── README.md                    # This document
-├── README.zh-TW.md              # Traditional Chinese
-├── README.zh-CN.md              # Simplified Chinese
-├── DELIVERY_SUMMARY.md          # Delivery file overview
-├── TEST_REPORT_FINAL.md         # Comprehensive test report
-└── docs/
-    ├── phase1/                  # Phase 1 documentation
-    │   ├── QUICKSTART_v1.1.md
-    │   ├── PHASE1_SUMMARY.md
-    │   └── ...
-    ├── phase2/                  # Phase 2 documentation
-    │   ├── speckit-sync-tool-phase2-architecture.md
-    │   └── ...
-    └── phase3/                  # Phase 3 documentation
-        ├── README.template-sync.md
-        └── ...
+├── README.md                    # English documentation (this file)
+├── README.zh-TW.md              # Traditional Chinese documentation
+├── README.zh-CN.md              # Simplified Chinese documentation
+└── TEST_REPORT_FINAL.md         # Comprehensive test report (9/10 tests passed)
 ```
+
+> **Note**: Development versions and phase documentation are available in git history. Use `git log` to view previous versions if needed.
 
 ## 🔧 Advanced Usage
 
