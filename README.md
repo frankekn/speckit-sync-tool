@@ -8,6 +8,7 @@
 
 當你有多個專案使用 spec-kit 的命令時，手動更新每個專案非常麻煩。這個工具可以：
 
+- ✅ **自動更新 spec-kit**：每次同步時自動檢查並拉取最新版本
 - ✅ 自動檢測哪些命令需要更新
 - ✅ 批次同步多個專案
 - ✅ 保護自訂命令不被覆蓋
@@ -43,12 +44,14 @@ cd ~/Documents/GitHub/my-project
 # 2. 初始化（第一次使用）
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh init
 
-# 3. 檢查更新
+# 3. 檢查更新（會自動更新 spec-kit 倉庫）
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh check
 
-# 4. 執行同步
+# 4. 執行同步（會自動更新 spec-kit 倉庫）
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh update
 ```
+
+> **💡 提示**：每次執行 `check` 或 `update` 時，工具會自動檢查 spec-kit 是否有新版本，並自動執行 `git pull`。你不需要手動更新！
 
 ### 批次同步多個專案
 

@@ -88,6 +88,61 @@ get_speckit_version() {
     fi
 }
 
+update_speckit_repo() {
+    # 檢查是否為 git 倉庫
+    if [ ! -d "$SPECKIT_PATH/.git" ]; then
+        log_warning "spec-kit 不是 git 倉庫，跳過自動更新"
+        return 0
+    fi
+
+    log_info "檢查 spec-kit 是否有新版本..."
+
+    # 切換到 spec-kit 目錄
+    cd "$SPECKIT_PATH"
+
+    # 檢查是否有未提交的變更
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        log_warning "spec-kit 有未提交的變更，跳過自動更新"
+        log_info "請先手動處理: cd $SPECKIT_PATH && git status"
+        cd - >/dev/null
+        return 0
+    fi
+
+    # 獲取當前分支
+    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # fetch 最新版本
+    git fetch origin --quiet 2>/dev/null || {
+        log_warning "無法連接到遠端倉庫，使用本地版本"
+        cd - >/dev/null
+        return 0
+    }
+
+    # 檢查是否有更新
+    local local_commit=$(git rev-parse HEAD)
+    local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null || echo "$local_commit")
+
+    if [ "$local_commit" != "$remote_commit" ]; then
+        log_info "發現 spec-kit 新版本，正在更新..."
+
+        # 顯示版本變更
+        local old_version=$(get_speckit_version)
+
+        if git pull origin $current_branch --quiet; then
+            local new_version=$(get_speckit_version)
+            log_success "spec-kit 已更新: $old_version → $new_version"
+        else
+            log_error "spec-kit 更新失敗"
+            cd - >/dev/null
+            return 1
+        fi
+    else
+        log_success "spec-kit 已是最新版本 ($(get_speckit_version))"
+    fi
+
+    cd - >/dev/null
+}
+
 # ============================================================================
 # 主要功能
 # ============================================================================
@@ -178,7 +233,10 @@ cmd_check() {
     log_header "檢查 Spec-Kit 更新"
     validate_speckit_path
 
+    # 自動更新 spec-kit 倉庫
+    update_speckit_repo
     echo ""
+
     echo "📁 Spec-Kit 路徑: $SPECKIT_PATH"
     echo "📁 命令目錄: $COMMANDS_DIR"
     echo "🔖 Spec-Kit 版本: $(get_speckit_version)"
@@ -231,6 +289,10 @@ cmd_check() {
 cmd_update() {
     log_header "同步 Spec-Kit 命令"
     validate_speckit_path
+
+    # 自動更新 spec-kit 倉庫
+    update_speckit_repo
+    echo ""
 
     # 建立備份
     local timestamp=$(date +%Y%m%d_%H%M%S)
