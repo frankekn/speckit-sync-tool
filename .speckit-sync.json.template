@@ -1,0 +1,75 @@
+{
+  "$schema": "https://github.com/your-username/speckit-sync-tool/blob/main/schema.json",
+  "version": "1.0.0",
+  "source": {
+    "type": "local",
+    "path": "/Users/termtek/Documents/GitHub/spec-kit",
+    "version": "0.0.20"
+  },
+  "strategy": {
+    "mode": "semi-auto",
+    "on_conflict": "ask",
+    "auto_backup": true,
+    "backup_retention": 5
+  },
+  "commands": {
+    "standard": [
+      {
+        "name": "analyze.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "checklist.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "clarify.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "constitution.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "implement.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "plan.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "specify.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      },
+      {
+        "name": "tasks.md",
+        "status": "synced",
+        "version": "0.0.20",
+        "last_sync": "2025-10-16T11:36:00Z"
+      }
+    ],
+    "custom": [],
+    "ignored": []
+  },
+  "metadata": {
+    "project_name": "my-project",
+    "initialized": "2025-10-16T11:36:00Z",
+    "last_check": "2025-10-16T11:36:00Z",
+    "total_syncs": 0
+  }
+}

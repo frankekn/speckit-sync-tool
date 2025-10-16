@@ -1,0 +1,98 @@
+# Spec-Kit 命令同步 Makefile
+#
+# 複製此檔案到你的專案: cp Makefile.template your-project/.claude/Makefile
+#
+# 使用方式：
+#   make sync-check    - 檢查哪些命令需要更新
+#   make sync-update   - 更新標準命令
+#   make sync-status   - 顯示同步狀態
+#   make sync-diff CMD=implement.md - 顯示差異
+#
+
+# ============================================================================
+# 配置（請根據你的環境修改）
+# ============================================================================
+
+# speckit-sync-tool 路徑
+SYNC_TOOL_DIR ?= $(HOME)/Documents/GitHub/speckit-sync-tool
+SYNC_SCRIPT = $(SYNC_TOOL_DIR)/sync-commands.sh
+
+# spec-kit 路徑
+SPECKIT_PATH ?= $(HOME)/Documents/GitHub/spec-kit
+
+# 顏色
+COLOR_RESET = \033[0m
+COLOR_GREEN = \033[32m
+COLOR_YELLOW = \033[33m
+COLOR_BLUE = \033[34m
+
+# ============================================================================
+# 目標
+# ============================================================================
+
+.PHONY: help
+help:
+	@echo "$(COLOR_BLUE)Spec-Kit 命令同步工具$(COLOR_RESET)"
+	@echo ""
+	@echo "可用命令："
+	@echo "  $(COLOR_GREEN)make sync-init$(COLOR_RESET)     - 初始化同步配置"
+	@echo "  $(COLOR_GREEN)make sync-check$(COLOR_RESET)    - 檢查哪些命令需要更新"
+	@echo "  $(COLOR_GREEN)make sync-update$(COLOR_RESET)   - 更新標準命令"
+	@echo "  $(COLOR_GREEN)make sync-status$(COLOR_RESET)   - 顯示同步狀態"
+	@echo "  $(COLOR_GREEN)make sync-diff$(COLOR_RESET)     - 顯示差異 (需設定 CMD=filename.md)"
+	@echo ""
+	@echo "配置："
+	@echo "  SPECKIT_PATH = $(SPECKIT_PATH)"
+	@echo "  SYNC_TOOL_DIR = $(SYNC_TOOL_DIR)"
+
+.PHONY: sync-init
+sync-init:
+	@if [ ! -f "$(SYNC_SCRIPT)" ]; then \
+		echo "$(COLOR_YELLOW)錯誤: 找不到同步工具 $(SYNC_SCRIPT)$(COLOR_RESET)"; \
+		echo "請先安裝 speckit-sync-tool"; \
+		exit 1; \
+	fi
+	@SPECKIT_PATH=$(SPECKIT_PATH) $(SYNC_SCRIPT) init
+
+.PHONY: sync-check
+sync-check:
+	@if [ ! -f "$(SYNC_SCRIPT)" ]; then \
+		echo "$(COLOR_YELLOW)錯誤: 找不到同步工具 $(SYNC_SCRIPT)$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@SPECKIT_PATH=$(SPECKIT_PATH) $(SYNC_SCRIPT) check
+
+.PHONY: sync-update
+sync-update:
+	@if [ ! -f "$(SYNC_SCRIPT)" ]; then \
+		echo "$(COLOR_YELLOW)錯誤: 找不到同步工具 $(SYNC_SCRIPT)$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@SPECKIT_PATH=$(SPECKIT_PATH) $(SYNC_SCRIPT) update
+
+.PHONY: sync-status
+sync-status:
+	@if [ ! -f "$(SYNC_SCRIPT)" ]; then \
+		echo "$(COLOR_YELLOW)錯誤: 找不到同步工具 $(SYNC_SCRIPT)$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@SPECKIT_PATH=$(SPECKIT_PATH) $(SYNC_SCRIPT) status
+
+.PHONY: sync-diff
+sync-diff:
+	@if [ -z "$(CMD)" ]; then \
+		echo "$(COLOR_YELLOW)請指定命令檔案: make sync-diff CMD=implement.md$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(SYNC_SCRIPT)" ]; then \
+		echo "$(COLOR_YELLOW)錯誤: 找不到同步工具 $(SYNC_SCRIPT)$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@SPECKIT_PATH=$(SPECKIT_PATH) $(SYNC_SCRIPT) diff $(CMD)
+
+# 快捷方式
+.PHONY: check update status diff
+check: sync-check
+update: sync-update
+status: sync-status
+diff: sync-diff
