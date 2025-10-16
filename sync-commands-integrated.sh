@@ -83,24 +83,36 @@ GRAY='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# 狀態符號標準（避免重複定義，提升視覺一致性）
+readonly ICON_SUCCESS="✓"
+readonly ICON_ERROR="✗"
+readonly ICON_WARNING="⚠"
+readonly ICON_INFO="ℹ"
+readonly ICON_NEW="⊕"
+readonly ICON_OUTDATED="↻"
+readonly ICON_PACKAGE="📦"
+readonly ICON_BACKUP="💾"
+readonly ICON_SYNC="🔄"
+readonly ICON_ROCKET="🚀"
+
 # ==============================================================================
 # 工具函數
 # ==============================================================================
 
 log_info() {
-    echo -e "${BLUE}ℹ${NC} $*"
+    echo -e "${BLUE}${ICON_INFO}${NC} $*"
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $*"
+    echo -e "${GREEN}${ICON_SUCCESS}${NC} $*"
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $*" >&2
+    echo -e "${RED}${ICON_ERROR}${NC} $*" >&2
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠${NC} $*"
+    echo -e "${YELLOW}${ICON_WARNING}${NC} $*"
 }
 
 log_header() {
@@ -113,6 +125,68 @@ log_header() {
 log_section() {
     echo ""
     echo -e "${BLUE}${BOLD}▶ $1${NC}"
+}
+
+log_debug() {
+    [[ "${DEBUG:-false}" == "true" ]] && echo -e "${GRAY}[DEBUG]${NC} $*" >&2
+}
+
+# 進度指示器
+show_progress() {
+    local current="$1"
+    local total="$2"
+    local message="${3:-處理中}"
+
+    # 檢測是否為終端（避免在日誌文件中產生異常字符）
+    if [[ ! -t 1 ]]; then
+        # 非終端環境，使用簡單格式
+        echo "[$current/$total] $message"
+        return
+    fi
+
+    local percent=$((current * 100 / total))
+    local filled=$((current * 40 / total))
+    local empty=$((40 - filled))
+
+    printf "\r${BLUE}[%3d%%]${NC} " "$percent"
+    printf "${GREEN}%*s${NC}" "$filled" | tr ' ' '█'
+    printf "${GRAY}%*s${NC}" "$empty" | tr ' ' '░'
+    printf " %s (%d/%d)" "$message" "$current" "$total"
+
+    [[ $current -eq $total ]] && echo ""  # 完成時換行
+}
+
+# ==============================================================================
+# 依賴檢查
+# ==============================================================================
+
+check_dependencies() {
+    local missing=()
+    local required_cmds=("git" "jq" "diff" "grep")
+
+    log_debug "檢查必要工具: ${required_cmds[*]}"
+
+    for cmd in "${required_cmds[@]}"; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        log_error "缺少必要工具"
+        echo ""
+        echo "${BOLD}缺少的工具：${NC}"
+        printf "  ${RED}${ICON_ERROR}${NC} %s\n" "${missing[@]}"
+        echo ""
+        echo "${BOLD}${ICON_ROCKET} 安裝方式：${NC}"
+        echo "  macOS:   ${CYAN}brew install ${missing[*]}${NC}"
+        echo "  Ubuntu:  ${CYAN}sudo apt install ${missing[*]}${NC}"
+        echo "  CentOS:  ${CYAN}sudo yum install ${missing[*]}${NC}"
+        return 1
+    fi
+
+    log_debug "依賴檢查通過"
+    return 0
 }
 
 # ==============================================================================
@@ -179,7 +253,25 @@ get_standard_commands_from_speckit() {
     local commands=()
 
     if [[ ! -d "$SPECKIT_COMMANDS" ]]; then
-        log_error "spec-kit 命令目錄不存在: $SPECKIT_COMMANDS"
+        log_error "找不到 spec-kit 命令目錄"
+        echo ""
+        echo "${BOLD}${ICON_WARNING} 預期路徑：${NC}$SPECKIT_COMMANDS"
+        echo ""
+        echo "${BOLD}${ICON_WARNING} 可能的原因：${NC}"
+        echo "  1. SPECKIT_PATH 設定錯誤"
+        echo "  2. spec-kit 倉庫不完整"
+        echo "  3. spec-kit 版本過舊"
+        echo ""
+        echo "${BOLD}${ICON_ROCKET} 建議操作：${NC}"
+        echo "  1. 檢查當前設定："
+        echo "     ${CYAN}echo \$SPECKIT_PATH${NC}"
+        echo "     ${GRAY}目前值: $SPECKIT_PATH${NC}"
+        echo ""
+        echo "  2. 驗證目錄結構："
+        echo "     ${CYAN}ls -la $SPECKIT_PATH${NC}"
+        echo ""
+        echo "  3. 重新克隆 spec-kit："
+        echo "     ${CYAN}git clone https://github.com/github/github-models-template.git spec-kit${NC}"
         return 1
     fi
 
@@ -366,10 +458,44 @@ select_agents_interactive() {
 
 load_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_debug "配置文件不存在，返回空配置"
         echo "{}"
         return
     fi
-    cat "$CONFIG_FILE"
+
+    log_debug "載入配置: $CONFIG_FILE"
+
+    # 驗證 JSON 格式
+    if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+        log_error "配置文件格式錯誤（無效的 JSON）"
+        echo ""
+        echo "${BOLD}${ICON_WARNING} 配置文件位置：${NC}$CONFIG_FILE"
+        echo ""
+        echo "${BOLD}${ICON_ROCKET} 建議操作：${NC}"
+        echo "  1. 檢查文件內容："
+        echo "     ${CYAN}cat $CONFIG_FILE${NC}"
+        echo ""
+        echo "  2. 驗證 JSON 語法："
+        echo "     ${CYAN}jq . $CONFIG_FILE${NC}"
+        echo ""
+        echo "  3. 重新初始化（會覆蓋現有配置）："
+        echo "     ${CYAN}rm $CONFIG_FILE && speckit-sync init${NC}"
+        echo ""
+        echo "  4. 從備份恢復（如果有）："
+        echo "     ${CYAN}cp $CONFIG_FILE.backup $CONFIG_FILE${NC}"
+        return 1
+    fi
+
+    local config=$(cat "$CONFIG_FILE")
+
+    # 驗證必要欄位
+    local version=$(echo "$config" | jq -r '.version // empty')
+    if [[ -z "$version" ]]; then
+        log_warning "配置缺少版本號，可能需要升級"
+        log_info "執行 ${CYAN}upgrade${NC} 命令來升級配置"
+    fi
+
+    echo "$config"
 }
 
 save_config() {
@@ -1007,6 +1133,9 @@ main() {
                 ;;
         esac
     done
+
+    # 檢查必要依賴（在執行任何命令前）
+    check_dependencies || exit 1
 
     case "$command" in
         init)

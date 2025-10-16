@@ -107,7 +107,7 @@ process_project() {
 
     log_section "Processing project: $project_name"
 
-    cd "$project_dir"
+    cd "$project_dir" || return 2  # 失敗：無法進入目錄
 
     # Check if initialized
     if [ ! -f ".speckit-sync.json" ]; then
@@ -117,27 +117,36 @@ process_project() {
             echo -n "Initialize this project? [y/N] "
             read -r ans
             if [ "${ans:-N}" = "y" ]; then
-                $SYNC_TOOL init
+                if ! $SYNC_TOOL init; then
+                    log_error "Initialization failed"
+                    return 2  # 失敗：初始化失敗
+                fi
             else
                 log_info "Skipped initialization"
-                return 1
+                return 1  # 跳過：用戶選擇不初始化
             fi
         elif [ "$mode" = "auto" ]; then
             log_info "Auto-initializing..."
-            SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL init
+            if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL init; then
+                log_error "Auto-initialization failed"
+                return 2  # 失敗：自動初始化失敗
+            fi
         else
-            return 1
+            return 1  # 跳過：check-only 模式且未初始化
         fi
     fi
 
     # Run check
     echo ""
-    SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL check
+    if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL check; then
+        log_error "Check failed for $project_name"
+        return 2  # 失敗：檢查失敗
+    fi
 
     # Decide whether to update based on mode
     if [ "$mode" = "check-only" ]; then
         log_info "Check-only mode, skipping update"
-        return 0
+        return 0  # 成功：check-only 模式完成
     fi
 
     echo ""
@@ -146,16 +155,22 @@ process_project() {
         echo -n "Update this project? [y/N] "
         read -r ans
         if [ "${ans:-N}" = "y" ]; then
-            SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update
-            return 0
+            if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update; then
+                log_error "Update failed for $project_name"
+                return 2  # 失敗：更新失敗
+            fi
+            return 0  # 成功：更新完成
         else
             log_info "Skipped update"
-            return 1
+            return 1  # 跳過：用戶選擇不更新
         fi
     elif [ "$mode" = "auto" ]; then
         log_info "Auto-updating..."
-        SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update
-        return 0
+        if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update; then
+            log_error "Auto-update failed for $project_name"
+            return 2  # 失敗：自動更新失敗
+        fi
+        return 0  # 成功：自動更新完成
     fi
 }
 
@@ -256,11 +271,21 @@ batch_sync() {
 
     # Process each project
     for project in "${PROJECTS[@]}"; do
-        if process_project "$project" "$mode"; then
-            success=$((success + 1))
-        else
-            skipped=$((skipped + 1))
-        fi
+        local exit_code
+        process_project "$project" "$mode"
+        exit_code=$?
+
+        case $exit_code in
+            0)  # 成功
+                success=$((success + 1))
+                ;;
+            1)  # 跳過
+                skipped=$((skipped + 1))
+                ;;
+            *)  # 失敗（2 或其他非零值）
+                failed=$((failed + 1))
+                ;;
+        esac
     done
 
     # Show summary
