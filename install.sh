@@ -51,10 +51,10 @@ install_tool() {
     # 建立符號連結
     log_info "建立符號連結..."
 
-    ln -sf "$SCRIPT_DIR/sync-commands.sh" "$INSTALL_DIR/$TOOL_NAME"
+    ln -sf "$SCRIPT_DIR/sync-commands-integrated.sh" "$INSTALL_DIR/$TOOL_NAME"
     chmod +x "$INSTALL_DIR/$TOOL_NAME"
 
-    log_success "已建立: $INSTALL_DIR/$TOOL_NAME -> $SCRIPT_DIR/sync-commands.sh"
+    log_success "已建立: $INSTALL_DIR/$TOOL_NAME -> $SCRIPT_DIR/sync-commands-integrated.sh"
 
     # 檢查 PATH
     echo ""

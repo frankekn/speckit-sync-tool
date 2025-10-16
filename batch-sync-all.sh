@@ -22,7 +22,7 @@ SPECKIT_PATH="${SPECKIT_PATH:-$GITHUB_DIR/spec-kit}"
 
 # 同步工具路徑（此腳本所在目錄）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SYNC_TOOL="$SCRIPT_DIR/sync-commands.sh"
+SYNC_TOOL="$SCRIPT_DIR/sync-commands-integrated.sh"
 
 # 要處理的專案列表（可以自訂）
 # 如果為空，會自動掃描所有有 .claude/commands 目錄的專案
