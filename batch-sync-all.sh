@@ -14,6 +14,9 @@ set -e
 # Configuration
 # ============================================================================
 
+# Verbosity level
+VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
+
 # GitHub directory (adjust according to your environment)
 GITHUB_DIR="${GITHUB_DIR:-$HOME/Documents/GitHub}"
 
@@ -42,32 +45,44 @@ NC='\033[0m' # No Color
 # ============================================================================
 
 log_info() {
-    echo -e "${BLUE}ℹ${NC} $1"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${BLUE}ℹ${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${GREEN}✓${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${YELLOW}⚠${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1"  # Always show errors
 }
 
 log_header() {
-    echo ""
-    echo -e "${CYAN}╔════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║ $1${NC}"
-    echo -e "${CYAN}╚════════════════════════════════════════════════════╝${NC}"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo ""
+        echo -e "${CYAN}╔════════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║ $1${NC}"
+        echo -e "${CYAN}╚════════════════════════════════════════════════════╝${NC}"
+    fi
 }
 
 log_section() {
-    echo ""
-    echo -e "${MAGENTA}▶ $1${NC}"
-    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo ""
+        echo -e "${MAGENTA}▶ $1${NC}"
+        echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    fi
+}
+
+log_debug() {
+    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${CYAN}[DEBUG]${NC} $1" >&2
+}
+
+log_verbose() {
+    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${CYAN}$1${NC}"
 }
 
 # ============================================================================
@@ -117,7 +132,7 @@ process_project() {
             echo -n "Initialize this project? [y/N] "
             read -r ans
             if [ "${ans:-N}" = "y" ]; then
-                if ! $SYNC_TOOL init; then
+                if ! VERBOSITY="$VERBOSITY" $SYNC_TOOL init; then
                     log_error "Initialization failed"
                     return 2  # 失敗：初始化失敗
                 fi
@@ -127,7 +142,7 @@ process_project() {
             fi
         elif [ "$mode" = "auto" ]; then
             log_info "Auto-initializing..."
-            if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL init; then
+            if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL init; then
                 log_error "Auto-initialization failed"
                 return 2  # 失敗：自動初始化失敗
             fi
@@ -138,7 +153,7 @@ process_project() {
 
     # Run check
     echo ""
-    if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL check; then
+    if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL check; then
         log_error "Check failed for $project_name"
         return 2  # 失敗：檢查失敗
     fi
@@ -155,7 +170,7 @@ process_project() {
         echo -n "Update this project? [y/N] "
         read -r ans
         if [ "${ans:-N}" = "y" ]; then
-            if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update; then
+            if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL update; then
                 log_error "Update failed for $project_name"
                 return 2  # 失敗：更新失敗
             fi
@@ -166,7 +181,7 @@ process_project() {
         fi
     elif [ "$mode" = "auto" ]; then
         log_info "Auto-updating..."
-        if ! SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update; then
+        if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL update; then
             log_error "Auto-update failed for $project_name"
             return 2  # 失敗：自動更新失敗
         fi
@@ -326,11 +341,15 @@ Usage:
 Options:
     --auto              Auto mode (no prompts, auto-update)
     --check-only        Check only, no updates
+    --quiet, -q         Quiet mode (errors only)
+    --verbose, -v       Verbose mode (detailed output)
+    --debug             Debug mode (all messages with timing)
     --help              Show this help message
 
 Environment variables:
     GITHUB_DIR          GitHub projects directory (default: ~/Documents/GitHub)
     SPECKIT_PATH        spec-kit repository path (default: \$GITHUB_DIR/spec-kit)
+    VERBOSITY           Output level: quiet|normal|verbose|debug (default: normal)
 
 Examples:
     # Interactive mode (prompt for each project)
@@ -369,6 +388,18 @@ main() {
                 ;;
             --check-only)
                 mode="check-only"
+                shift
+                ;;
+            --quiet|-q)
+                VERBOSITY="quiet"
+                shift
+                ;;
+            --verbose|-v)
+                VERBOSITY="verbose"
+                shift
+                ;;
+            --debug)
+                VERBOSITY="debug"
                 shift
                 ;;
             --help|-h)

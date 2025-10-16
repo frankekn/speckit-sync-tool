@@ -30,6 +30,8 @@ set -euo pipefail
 # ==============================================================================
 
 VERSION="2.1.0"
+VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
+DRY_RUN=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
 CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
@@ -100,35 +102,76 @@ readonly ICON_ROCKET="🚀"
 # ==============================================================================
 
 log_info() {
-    echo -e "${BLUE}${ICON_INFO}${NC} $*"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${BLUE}${ICON_INFO}${NC} $*"
 }
 
 log_success() {
-    echo -e "${GREEN}${ICON_SUCCESS}${NC} $*"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${GREEN}${ICON_SUCCESS}${NC} $*"
 }
 
 log_error() {
-    echo -e "${RED}${ICON_ERROR}${NC} $*" >&2
+    echo -e "${RED}${ICON_ERROR}${NC} $*" >&2  # Always show errors
 }
 
 log_warning() {
-    echo -e "${YELLOW}${ICON_WARNING}${NC} $*"
+    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${YELLOW}${ICON_WARNING}${NC} $*"
 }
 
 log_header() {
-    echo ""
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}${BOLD}$1${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CYAN}${BOLD}$1${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    fi
 }
 
 log_section() {
-    echo ""
-    echo -e "${BLUE}${BOLD}▶ $1${NC}"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo ""
+        echo -e "${BLUE}${BOLD}▶ $1${NC}"
+    fi
 }
 
 log_debug() {
-    [[ "${DEBUG:-false}" == "true" ]] && echo -e "${GRAY}[DEBUG]${NC} $*" >&2
+    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${GRAY}[DEBUG]${NC} $*" >&2
+}
+
+log_verbose() {
+    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${GRAY}$*${NC}"
+}
+
+# 計時包裝器（僅在 verbose/debug 模式顯示）
+with_timing() {
+    local description="$1"
+    shift
+
+    if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
+        local start_time=$(date +%s.%N)
+        log_verbose "開始: $description"
+        "$@"
+        local exit_code=$?
+        local end_time=$(date +%s.%N)
+        local duration=$(echo "$end_time - $start_time" | bc)
+        log_verbose "完成: $description (耗時 ${duration}s)"
+        return $exit_code
+    else
+        "$@"
+    fi
+}
+
+# Dry-run 執行包裝器
+dry_run_execute() {
+    local description="$1"
+    shift
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo -e "${YELLOW}[DRY-RUN]${NC} $description"
+        echo -e "${GRAY}    指令: $*${NC}"
+        return 0
+    else
+        "$@"
+    fi
 }
 
 # 進度指示器
@@ -615,7 +658,7 @@ templates_sync() {
     local selected=$(echo "$config" | jq -r '.templates.selected[]' 2>/dev/null)
 
     # 確保目標目錄存在
-    mkdir -p "$sync_dir"
+    dry_run_execute "建立模版同步目錄: $sync_dir" mkdir -p "$sync_dir"
 
     local synced=0
     while IFS= read -r tpl; do
@@ -629,7 +672,7 @@ templates_sync() {
             continue
         fi
 
-        cp "$src" "$dest"
+        dry_run_execute "同步模版: $tpl → $dest" cp "$src" "$dest"
         log_success "$tpl - 已同步"
         ((synced++))
     done <<< "$selected"
@@ -747,8 +790,8 @@ sync_command() {
         return 1
     fi
 
-    mkdir -p "$(dirname "$target")"
-    cp "$source" "$target"
+    dry_run_execute "建立目錄: $(dirname "$target")" mkdir -p "$(dirname "$target")"
+    dry_run_execute "複製檔案: $source → $target" cp "$source" "$target"
     return 0
 }
 
@@ -764,7 +807,7 @@ check_updates() {
     log_header "檢查 ${AGENT_NAMES[$agent]} 更新"
 
     # 自動更新 spec-kit
-    update_speckit_repo
+    with_timing "spec-kit 更新檢查" update_speckit_repo
 
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
@@ -816,6 +859,320 @@ check_updates() {
     fi
 }
 
+# ==============================================================================
+# Rollback 功能
+# ==============================================================================
+
+list_backups() {
+    local agent="$1"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    local commands_dir="${AGENTS[$agent]}"
+    local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
+
+    if [[ ! -d "$backup_base" ]]; then
+        log_warning "沒有找到任何備份"
+        return 1
+    fi
+
+    # 獲取所有備份目錄（按時間排序）
+    local backups=($(find "$backup_base" -maxdepth 1 -type d -name "20*" | sort -r))
+
+    if [[ ${#backups[@]} -eq 0 ]]; then
+        log_warning "沒有找到任何備份"
+        return 1
+    fi
+
+    echo ""
+    echo "${BOLD}可用備份：${NC}"
+    echo ""
+
+    local idx=1
+    for backup_dir in "${backups[@]}"; do
+        local timestamp=$(basename "$backup_dir")
+        local formatted_time=$(echo "$timestamp" | sed 's/_/ /')
+        local file_count=$(find "$backup_dir" -type f -name "*.md" | wc -l | tr -d ' ')
+        local size=$(du -sh "$backup_dir" 2>/dev/null | cut -f1)
+
+        printf "[%2d] %s (%s 個檔案, %s)\n" "$idx" "$formatted_time" "$file_count" "$size"
+        idx=$((idx + 1))
+    done
+
+    echo ""
+}
+
+show_backup_diff() {
+    local agent="$1"
+    local backup_dir="$2"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    local commands_dir="${AGENTS[$agent]}"
+    local current_dir="$PROJECT_ROOT/$commands_dir"
+
+    log_section "備份與當前版本差異"
+
+    echo ""
+    echo "${BOLD}備份：${NC}$backup_dir"
+    echo "${BOLD}當前：${NC}$current_dir"
+    echo ""
+
+    local has_diff=false
+
+    # 比對所有 .md 檔案
+    for backup_file in "$backup_dir"/*.md; do
+        [[ ! -f "$backup_file" ]] && continue
+
+        local filename=$(basename "$backup_file")
+        local current_file="$current_dir/$filename"
+
+        if [[ ! -f "$current_file" ]]; then
+            echo -e "${RED}✗${NC} $filename - 當前版本中不存在"
+            has_diff=true
+            continue
+        fi
+
+        if ! diff -q "$backup_file" "$current_file" >/dev/null 2>&1; then
+            echo -e "${YELLOW}↻${NC} $filename - 有差異"
+            has_diff=true
+
+            # 顯示簡要差異統計
+            local lines_changed=$(diff "$backup_file" "$current_file" 2>/dev/null | grep -c "^[<>]" || echo "0")
+            echo "   ${GRAY}變更行數: $lines_changed${NC}"
+        else
+            echo -e "${GREEN}✓${NC} $filename - 相同"
+        fi
+    done
+
+    # 檢查當前版本中的新檔案
+    for current_file in "$current_dir"/*.md; do
+        [[ ! -f "$current_file" ]] && continue
+
+        local filename=$(basename "$current_file")
+        local backup_file="$backup_dir/$filename"
+
+        if [[ ! -f "$backup_file" ]]; then
+            echo -e "${CYAN}⊕${NC} $filename - 備份中不存在（新增的檔案）"
+            has_diff=true
+        fi
+    done
+
+    echo ""
+
+    if [[ "$has_diff" == false ]]; then
+        log_info "備份與當前版本完全相同"
+        return 0
+    fi
+
+    return 0
+}
+
+validate_backup() {
+    local backup_dir="$1"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        log_error "備份目錄不存在: $backup_dir"
+        return 1
+    fi
+
+    # 檢查備份中是否有 .md 檔案
+    local file_count=$(find "$backup_dir" -type f -name "*.md" | wc -l | tr -d ' ')
+
+    if [[ "$file_count" -eq 0 ]]; then
+        log_error "備份目錄中沒有 .md 檔案"
+        return 1
+    fi
+
+    log_debug "備份驗證通過: $file_count 個檔案"
+    return 0
+}
+
+restore_backup() {
+    local agent="$1"
+    local backup_dir="$2"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    # 驗證備份
+    if ! validate_backup "$backup_dir"; then
+        return 1
+    fi
+
+    local commands_dir="${AGENTS[$agent]}"
+    local current_dir="$PROJECT_ROOT/$commands_dir"
+
+    log_header "還原備份"
+
+    echo ""
+    echo "${BOLD}來源：${NC}$backup_dir"
+    echo "${BOLD}目標：${NC}$current_dir"
+    echo ""
+
+    # 建立還原前的備份（以防萬一）
+    local safety_backup="$PROJECT_ROOT/$commands_dir/.backup/before_rollback_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$safety_backup"
+
+    if [[ -d "$current_dir" ]]; then
+        cp -r "$current_dir"/*.md "$safety_backup/" 2>/dev/null || true
+        log_info "${ICON_BACKUP} 安全備份: $safety_backup"
+    fi
+
+    echo ""
+
+    # 執行還原
+    local restored=0
+    local failed=0
+
+    for backup_file in "$backup_dir"/*.md; do
+        [[ ! -f "$backup_file" ]] && continue
+
+        local filename=$(basename "$backup_file")
+        local target_file="$current_dir/$filename"
+
+        if cp "$backup_file" "$target_file" 2>/dev/null; then
+            log_success "$filename - 已還原"
+            restored=$((restored + 1))
+        else
+            log_error "$filename - 還原失敗"
+            failed=$((failed + 1))
+        fi
+    done
+
+    echo ""
+    log_header "還原完成"
+    echo "  ${ICON_SUCCESS} 成功: $restored 個"
+    echo "  ${ICON_ERROR} 失敗: $failed 個"
+    echo "  ${ICON_BACKUP} 安全備份: $safety_backup"
+
+    if [[ $failed -eq 0 ]]; then
+        log_success "所有檔案已成功還原"
+        return 0
+    else
+        log_warning "部分檔案還原失敗，請檢查錯誤訊息"
+        return 1
+    fi
+}
+
+select_backup_interactive() {
+    local agent="$1"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    local commands_dir="${AGENTS[$agent]}"
+    local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
+
+    if [[ ! -d "$backup_base" ]]; then
+        log_error "沒有找到任何備份"
+        return 1
+    fi
+
+    # 獲取所有備份目錄（按時間排序，最新的在前）
+    local backups=($(find "$backup_base" -maxdepth 1 -type d -name "20*" | sort -r))
+
+    if [[ ${#backups[@]} -eq 0 ]]; then
+        log_error "沒有找到任何備份"
+        return 1
+    fi
+
+    # 顯示備份列表
+    list_backups "$agent"
+
+    # 互動式選擇
+    local selected_backup=""
+
+    while true; do
+        read -p "請選擇要還原的備份 (1-${#backups[@]}, q 退出): " -r
+
+        if [[ "$REPLY" == "q" ]] || [[ "$REPLY" == "Q" ]]; then
+            log_info "已取消"
+            return 1
+        fi
+
+        if [[ "$REPLY" =~ ^[0-9]+$ ]] && [[ "$REPLY" -ge 1 ]] && [[ "$REPLY" -le "${#backups[@]}" ]]; then
+            local idx=$((REPLY - 1))
+            selected_backup="${backups[$idx]}"
+            break
+        else
+            log_warning "無效選擇，請輸入 1-${#backups[@]} 或 q 退出"
+        fi
+    done
+
+    # 顯示差異
+    echo ""
+    show_backup_diff "$agent" "$selected_backup"
+
+    # 確認還原
+    echo ""
+    read -p "${YELLOW}確定要還原這個備份嗎？此操作會覆蓋當前檔案 [y/N]${NC} " -r
+
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "已取消還原"
+        return 1
+    fi
+
+    # 執行還原
+    restore_backup "$agent" "$selected_backup"
+}
+
+rollback_command() {
+    local agent="$1"
+    local backup_timestamp="$2"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    log_header "Rollback - ${AGENT_NAMES[$agent]}"
+
+    # 如果指定了時間戳，直接還原
+    if [[ -n "$backup_timestamp" ]]; then
+        local commands_dir="${AGENTS[$agent]}"
+        local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$backup_timestamp"
+
+        if [[ ! -d "$backup_dir" ]]; then
+            log_error "找不到指定的備份: $backup_timestamp"
+            return 1
+        fi
+
+        show_backup_diff "$agent" "$backup_dir"
+
+        echo ""
+        read -p "${YELLOW}確定要還原這個備份嗎？[y/N]${NC} " -r
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            restore_backup "$agent" "$backup_dir"
+        else
+            log_info "已取消還原"
+        fi
+    else
+        # 互動式選擇備份
+        select_backup_interactive "$agent"
+    fi
+}
+
+# ==============================================================================
+# 命令同步
+# ==============================================================================
+
 update_commands() {
     local agent="$1"
 
@@ -833,10 +1190,10 @@ update_commands() {
 
     # 建立備份
     local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$(date +%Y%m%d_%H%M%S)"
-    mkdir -p "$backup_dir"
+    dry_run_execute "建立備份目錄: $backup_dir" mkdir -p "$backup_dir"
 
     if [[ -d "$PROJECT_ROOT/$commands_dir" ]]; then
-        cp -r "$PROJECT_ROOT/$commands_dir"/*.md "$backup_dir/" 2>/dev/null || true
+        dry_run_execute "備份現有命令檔案" cp -r "$PROJECT_ROOT/$commands_dir"/*.md "$backup_dir/" 2>/dev/null || true
         log_info "📦 建立備份: $backup_dir"
     fi
 
@@ -883,6 +1240,358 @@ update_commands() {
 }
 
 # ==============================================================================
+# ==============================================================================
+# 互動式精靈
+# ==============================================================================
+
+wizard() {
+    log_header "SpecKit Sync 互動式設定精靈"
+
+    echo ""
+    echo -e "${BOLD}歡迎使用 SpecKit Sync！${NC}"
+    echo "這個精靈將協助您完成初始設定並開始同步命令。"
+    echo ""
+
+    # ==================== 步驟 1: 環境檢查 ====================
+    log_section "步驟 1/6: 環境檢查"
+    echo ""
+
+    # 檢查依賴
+    log_info "檢查必要工具..."
+    if ! check_dependencies; then
+        log_error "請先安裝必要工具後再執行精靈"
+        return 1
+    fi
+    log_success "所有必要工具已安裝"
+
+    echo ""
+
+    # 檢查 spec-kit 路徑
+    log_info "檢查 spec-kit 路徑..."
+    if [[ ! -d "$SPECKIT_PATH" ]]; then
+        log_error "spec-kit 路徑無效: $SPECKIT_PATH"
+        echo ""
+        echo "${BOLD}${ICON_ROCKET} 可選操作：${NC}"
+        echo "  1. 設定 SPECKIT_PATH 環境變數指向正確路徑"
+        echo "  2. 將 spec-kit 克隆到: $(dirname "$SCRIPT_DIR")/spec-kit"
+        echo ""
+        read -p "是否要自動克隆 spec-kit？[y/N] " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            local clone_path="$(dirname "$SCRIPT_DIR")/spec-kit"
+            log_info "克隆 spec-kit 到 $clone_path..."
+            if git clone https://github.com/github/github-models-template.git "$clone_path" 2>/dev/null; then
+                SPECKIT_PATH="$clone_path"
+                SPECKIT_COMMANDS="$SPECKIT_PATH/templates/commands"
+                SPECKIT_TEMPLATES="$SPECKIT_PATH/templates"
+                log_success "spec-kit 克隆成功"
+            else
+                log_error "克隆失敗，請手動設定"
+                return 1
+            fi
+        else
+            return 1
+        fi
+    else
+        log_success "spec-kit 路徑有效: $SPECKIT_PATH"
+
+        # 檢查是否需要更新
+        if [[ -d "$SPECKIT_PATH/.git" ]]; then
+            log_info "檢查 spec-kit 更新..."
+            update_speckit_repo
+        fi
+    fi
+
+    echo ""
+
+    # ==================== 步驟 2: 偵測代理 ====================
+    log_section "步驟 2/6: 偵測 AI 代理"
+    echo ""
+
+    log_info "掃描專案目錄..."
+    local detected_agents=($(detect_agents_quiet))
+
+    if [[ ${#detected_agents[@]} -eq 0 ]]; then
+        log_warning "未偵測到任何 AI 代理目錄"
+        echo ""
+        echo "${BOLD}${ICON_INFO} 支援的代理及其目錄：${NC}"
+        for agent in "${!AGENTS[@]}"; do
+            echo "  • ${AGENT_NAMES[$agent]}: ${AGENTS[$agent]}"
+        done
+        echo ""
+        read -p "是否要為 Claude Code 創建預設目錄？[y/N] " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            mkdir -p "$PROJECT_ROOT/.claude/commands"
+            log_success "已創建 .claude/commands 目錄"
+            detected_agents=("claude")
+        else
+            log_error "無可用代理，無法繼續"
+            return 1
+        fi
+    else
+        log_success "偵測到 ${#detected_agents[@]} 個代理："
+        for agent in "${detected_agents[@]}"; do
+            echo "  ${GREEN}${ICON_SUCCESS}${NC} ${AGENT_NAMES[$agent]} (${AGENTS[$agent]})"
+        done
+    fi
+
+    echo ""
+
+    # ==================== 步驟 3: 選擇要啟用的代理 ====================
+    log_section "步驟 3/6: 選擇要啟用的代理"
+    echo ""
+
+    local selected_agents=()
+
+    if [[ ${#detected_agents[@]} -eq 1 ]]; then
+        log_info "只有一個代理，自動選擇: ${AGENT_NAMES[${detected_agents[0]}]}"
+        selected_agents=("${detected_agents[0]}")
+    else
+        echo "請選擇要啟用同步的代理："
+        echo ""
+
+        for i in "${!detected_agents[@]}"; do
+            local agent="${detected_agents[$i]}"
+            local name="${AGENT_NAMES[$agent]}"
+            local dir="${AGENTS[$agent]}"
+
+            read -p "  [$((i+1))] $name ($dir) - 啟用？[Y/n] " -r
+            if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
+                selected_agents+=("$agent")
+                log_success "  已選擇: $name"
+            else
+                log_info "  已跳過: $name"
+            fi
+        done
+    fi
+
+    if [[ ${#selected_agents[@]} -eq 0 ]]; then
+        log_error "未選擇任何代理"
+        return 1
+    fi
+
+    echo ""
+    log_success "已選擇 ${#selected_agents[@]} 個代理"
+
+    echo ""
+
+    # ==================== 步驟 4: 選擇同步策略 ====================
+    log_section "步驟 4/6: 選擇同步策略"
+    echo ""
+
+    echo "${BOLD}同步策略選項：${NC}"
+    echo "  [1] 半自動模式（推薦）- 有衝突時詢問，自動備份"
+    echo "  [2] 完全自動模式 - 自動覆蓋，保留備份"
+    echo "  [3] 手動模式 - 每個檔案都確認"
+    echo ""
+
+    local strategy_mode="semi-auto"
+    local on_conflict="ask"
+
+    read -p "請選擇 (1-3) [預設: 1]: " -r
+    case "${REPLY:-1}" in
+        1)
+            strategy_mode="semi-auto"
+            on_conflict="ask"
+            log_success "已選擇：半自動模式"
+            ;;
+        2)
+            strategy_mode="auto"
+            on_conflict="overwrite"
+            log_success "已選擇：完全自動模式"
+            ;;
+        3)
+            strategy_mode="manual"
+            on_conflict="ask"
+            log_success "已選擇：手動模式"
+            ;;
+        *)
+            log_warning "無效選擇，使用預設值：半自動模式"
+            ;;
+    esac
+
+    echo ""
+
+    # ==================== 步驟 5: 選擇要同步的命令 ====================
+    log_section "步驟 5/6: 選擇要同步的命令"
+    echo ""
+
+    log_info "掃描 spec-kit 中的可用命令..."
+    local standard_commands=($(get_standard_commands_from_speckit))
+
+    if [[ ${#standard_commands[@]} -eq 0 ]]; then
+        log_error "未找到任何命令"
+        return 1
+    fi
+
+    log_success "發現 ${#standard_commands[@]} 個標準命令"
+    echo ""
+
+    echo "${BOLD}命令選擇：${NC}"
+    echo "  [1] 同步所有命令（推薦新專案）"
+    echo "  [2] 只同步核心命令（specify, plan, tasks, implement）"
+    echo "  [3] 自訂選擇"
+    echo ""
+
+    local selected_commands=()
+
+    read -p "請選擇 (1-3) [預設: 1]: " -r
+    case "${REPLY:-1}" in
+        1)
+            selected_commands=("${standard_commands[@]}")
+            log_success "已選擇：所有 ${#selected_commands[@]} 個命令"
+            ;;
+        2)
+            local core_commands=("specify.md" "plan.md" "tasks.md" "implement.md")
+            for cmd in "${core_commands[@]}"; do
+                if [[ " ${standard_commands[@]} " =~ " ${cmd} " ]]; then
+                    selected_commands+=("$cmd")
+                fi
+            done
+            log_success "已選擇：${#selected_commands[@]} 個核心命令"
+            ;;
+        3)
+            echo ""
+            echo "${BOLD}可用命令：${NC}"
+            for i in "${!standard_commands[@]}"; do
+                local cmd="${standard_commands[$i]}"
+                local desc=$(get_command_description "$SPECKIT_COMMANDS/$cmd")
+                printf "  [%2d] %s - %s\n" "$((i+1))" "$cmd" "$desc"
+            done
+            echo ""
+            echo "請輸入要同步的命令編號（空格分隔，Enter 結束）："
+            read -p "> " -r
+
+            for num in $REPLY; do
+                if [[ "$num" =~ ^[0-9]+$ ]] && [[ "$num" -ge 1 ]] && [[ "$num" -le "${#standard_commands[@]}" ]]; then
+                    local idx=$((num - 1))
+                    selected_commands+=("${standard_commands[$idx]}")
+                fi
+            done
+
+            if [[ ${#selected_commands[@]} -eq 0 ]]; then
+                log_warning "未選擇任何命令，使用所有命令"
+                selected_commands=("${standard_commands[@]}")
+            else
+                log_success "已選擇：${#selected_commands[@]} 個命令"
+            fi
+            ;;
+        *)
+            log_warning "無效選擇，使用預設值：所有命令"
+            selected_commands=("${standard_commands[@]}")
+            ;;
+    esac
+
+    echo ""
+
+    # ==================== 步驟 6: 創建配置並執行同步 ====================
+    log_section "步驟 6/6: 創建配置並執行同步"
+    echo ""
+
+    # 檢查是否已有配置
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log_warning "配置檔案已存在"
+        read -p "是否要覆蓋現有配置？[y/N] " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "保留現有配置，結束精靈"
+            return 0
+        fi
+
+        # 備份現有配置
+        local backup_file="$CONFIG_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$CONFIG_FILE" "$backup_file"
+        log_success "現有配置已備份: $backup_file"
+    fi
+
+    # 建立配置
+    log_info "創建配置檔案..."
+
+    local config=$(cat <<EOF
+{
+  "version": "2.1.0",
+  "source": {
+    "type": "local",
+    "path": "$SPECKIT_PATH",
+    "version": "unknown"
+  },
+  "strategy": {
+    "mode": "$strategy_mode",
+    "on_conflict": "$on_conflict",
+    "auto_backup": true,
+    "backup_retention": 5
+  },
+  "agents": {},
+  "templates": {
+    "enabled": false,
+    "sync_dir": ".claude/templates",
+    "selected": [],
+    "last_sync": null
+  },
+  "metadata": {
+    "project_name": "$(basename "$PROJECT_ROOT")",
+    "initialized": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "last_check": null,
+    "total_syncs": 0
+  }
+}
+EOF
+)
+
+    # 為每個選擇的代理添加配置
+    local commands_json=$(printf '%s\n' "${selected_commands[@]}" | jq -R . | jq -s .)
+
+    for agent in "${selected_agents[@]}"; do
+        local agent_dir="${AGENTS[$agent]}"
+
+        config=$(echo "$config" | jq --arg agent "$agent" \
+                                      --arg dir "$agent_dir" \
+                                      --argjson cmds "$commands_json" '
+            .agents[$agent] = {
+                "enabled": true,
+                "commands_dir": $dir,
+                "commands": {
+                    "standard": $cmds,
+                    "custom": [],
+                    "synced": [],
+                    "customized": []
+                }
+            }
+        ')
+    done
+
+    save_config "$config"
+    log_success "配置檔案已創建: $CONFIG_FILE"
+
+    echo ""
+
+    # 詢問是否立即執行同步
+    read -p "是否要立即執行命令同步？[Y/n] " -r
+    if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
+        echo ""
+        log_header "開始同步命令"
+
+        for agent in "${selected_agents[@]}"; do
+            echo ""
+            update_commands "$agent"
+        done
+
+        echo ""
+        log_header "精靈完成"
+        echo ""
+        log_success "設定完成！所有命令已同步。"
+    else
+        echo ""
+        log_header "精靈完成"
+        echo ""
+        log_success "設定完成！"
+        echo ""
+        log_info "下一步："
+        echo "  1. 執行 'check' 檢查更新"
+        echo "  2. 執行 'update' 同步命令"
+        echo "  3. 執行 'templates select' 選擇要同步的模版"
+    fi
+
+    echo ""
+}
 # 初始化
 # ==============================================================================
 
@@ -1006,11 +1715,13 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     $0 <command> [options]
 
 命令:
+    wizard                       互動式設定精靈（推薦新手使用）
     init                         初始化配置
     detect-agents                偵測可用的 AI 代理
     check [options]              檢查更新狀態
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
+    rollback [options]           還原到先前的備份
 
     templates list               列出可用模版
     templates select             選擇要同步的模版
@@ -1022,13 +1733,21 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 選項:
     --agent <name>               指定要操作的代理
     --all-agents                 自動偵測並處理所有代理（忽略配置檔啟用狀態）
+    --dry-run, -n                預覽模式（顯示將執行的操作但不實際執行）
+    --quiet, -q                  安靜模式（僅顯示錯誤）
+    --verbose, -v                詳細模式（顯示額外資訊）
+    --debug                      除錯模式（顯示所有訊息和計時）
     --help                       顯示此幫助訊息
 
 環境變數:
     SPECKIT_PATH                 spec-kit 倉庫路徑 (預設: ../spec-kit)
+    VERBOSITY                    輸出層級: quiet|normal|verbose|debug (預設: normal)
 
 範例:
-    # 初始化配置
+    # 使用互動式精靈（推薦第一次使用）
+    $0 wizard
+
+    # 初始化配置（進階用戶）
     $0 init
 
     # 檢查配置中啟用的代理
@@ -1048,6 +1767,12 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
     # 掃描新命令
     $0 scan
+
+    # 還原備份（互動式選擇）
+    $0 rollback --agent claude
+
+    # 還原到指定時間的備份
+    $0 rollback --agent claude 20241016_143022
 
     # 選擇並同步模版
     $0 templates select
@@ -1123,6 +1848,22 @@ main() {
                 all_agents=true
                 shift
                 ;;
+            --dry-run|-n)
+                DRY_RUN=true
+                shift
+                ;;
+            --quiet|-q)
+                VERBOSITY="quiet"
+                shift
+                ;;
+            --verbose|-v)
+                VERBOSITY="verbose"
+                shift
+                ;;
+            --debug)
+                VERBOSITY="debug"
+                shift
+                ;;
             --help|-h)
                 show_usage
                 exit 0
@@ -1135,9 +1876,12 @@ main() {
     done
 
     # 檢查必要依賴（在執行任何命令前）
-    check_dependencies || exit 1
+    with_timing "依賴檢查" check_dependencies || exit 1
 
     case "$command" in
+        wizard)
+            wizard
+            ;;
         init)
             init_config
             ;;
@@ -1211,6 +1955,14 @@ main() {
         scan)
             if [[ -n "$agent" ]]; then
                 scan_new_commands "$agent"
+            else
+                log_error "請指定代理: --agent <name>"
+                exit 1
+            fi
+            ;;
+        rollback)
+            if [[ -n "$agent" ]]; then
+                rollback_command "$agent" "$subcommand"
             else
                 log_error "請指定代理: --agent <name>"
                 exit 1
