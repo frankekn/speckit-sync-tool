@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 #
-# 批次同步多個專案的 spec-kit 命令
+# Batch sync spec-kit commands across multiple projects
 #
-# 使用方式：
-#   ./batch-sync-all.sh                    # 互動模式
-#   ./batch-sync-all.sh --auto             # 自動模式（不詢問）
-#   ./batch-sync-all.sh --check-only       # 僅檢查，不更新
+# Usage:
+#   ./batch-sync-all.sh                    # Interactive mode
+#   ./batch-sync-all.sh --auto             # Auto mode (no prompts)
+#   ./batch-sync-all.sh --check-only       # Check only, no updates
 #
 
 set -e
 
 # ============================================================================
-# 配置
+# Configuration
 # ============================================================================
 
-# GitHub 目錄（根據你的環境調整）
+# GitHub directory (adjust according to your environment)
 GITHUB_DIR="${GITHUB_DIR:-$HOME/Documents/GitHub}"
 
-# spec-kit 路徑
+# spec-kit path
 SPECKIT_PATH="${SPECKIT_PATH:-$GITHUB_DIR/spec-kit}"
 
-# 同步工具路徑（此腳本所在目錄）
+# Sync tool path (this script's directory)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC_TOOL="$SCRIPT_DIR/sync-commands-integrated.sh"
 
-# 要處理的專案列表（可以自訂）
-# 如果為空，會自動掃描所有有 .claude/commands 目錄的專案
+# Project list (can be customized)
+# If empty, will auto-scan all projects with .claude/commands directory
 PROJECTS=()
 
-# 顏色
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -38,7 +38,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
 # ============================================================================
-# 輔助函數
+# Helper functions
 # ============================================================================
 
 log_info() {
@@ -71,12 +71,10 @@ log_section() {
 }
 
 # ============================================================================
-# 專案掃描
+# Project scanning
 # ============================================================================
 
 scan_projects() {
-    log_info "掃描 $GITHUB_DIR 中的專案..."
-
     local found_projects=()
 
     for dir in "$GITHUB_DIR"/*; do
@@ -84,12 +82,12 @@ scan_projects() {
 
         local project_name=$(basename "$dir")
 
-        # 跳過 spec-kit 和同步工具本身
+        # Skip spec-kit and sync tool itself
         if [ "$project_name" = "spec-kit" ] || [ "$project_name" = "speckit-sync-tool" ]; then
             continue
         fi
 
-        # 檢查是否有 .claude/commands 目錄
+        # Check if has .claude/commands directory
         if [ -d "$dir/.claude/commands" ]; then
             found_projects+=("$project_name")
         fi
@@ -99,7 +97,7 @@ scan_projects() {
 }
 
 # ============================================================================
-# 主要功能
+# Main functionality
 # ============================================================================
 
 process_project() {
@@ -107,111 +105,111 @@ process_project() {
     local mode="${2:-interactive}"
     local project_dir="$GITHUB_DIR/$project_name"
 
-    log_section "處理專案: $project_name"
+    log_section "Processing project: $project_name"
 
     cd "$project_dir"
 
-    # 檢查是否已初始化
-    if [ ! -f ".claude/.speckit-sync.json" ]; then
-        log_warning "專案未初始化"
+    # Check if initialized
+    if [ ! -f ".speckit-sync.json" ]; then
+        log_warning "Project not initialized"
 
         if [ "$mode" = "interactive" ]; then
-            echo -n "是否初始化此專案？[y/N] "
+            echo -n "Initialize this project? [y/N] "
             read -r ans
             if [ "${ans:-N}" = "y" ]; then
                 $SYNC_TOOL init
             else
-                log_info "跳過初始化"
+                log_info "Skipped initialization"
                 return 1
             fi
         elif [ "$mode" = "auto" ]; then
-            log_info "自動初始化..."
+            log_info "Auto-initializing..."
             SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL init
         else
             return 1
         fi
     fi
 
-    # 執行檢查
+    # Run check
     echo ""
     SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL check
 
-    # 根據模式決定是否更新
+    # Decide whether to update based on mode
     if [ "$mode" = "check-only" ]; then
-        log_info "僅檢查模式，不執行更新"
+        log_info "Check-only mode, skipping update"
         return 0
     fi
 
     echo ""
 
     if [ "$mode" = "interactive" ]; then
-        echo -n "是否更新此專案？[y/N] "
+        echo -n "Update this project? [y/N] "
         read -r ans
         if [ "${ans:-N}" = "y" ]; then
             SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update
             return 0
         else
-            log_info "跳過更新"
+            log_info "Skipped update"
             return 1
         fi
     elif [ "$mode" = "auto" ]; then
-        log_info "自動更新..."
+        log_info "Auto-updating..."
         SPECKIT_PATH="$SPECKIT_PATH" $SYNC_TOOL update
         return 0
     fi
 }
 
 update_speckit_repo() {
-    # 檢查是否為 git 倉庫
+    # Check if it's a git repository
     if [ ! -d "$SPECKIT_PATH/.git" ]; then
-        log_warning "spec-kit 不是 git 倉庫，跳過自動更新"
+        log_warning "spec-kit is not a git repository, skipping auto-update"
         return 0
     fi
 
-    log_info "檢查 spec-kit 是否有新版本..."
+    log_info "Checking for spec-kit updates..."
 
-    # 切換到 spec-kit 目錄
+    # Switch to spec-kit directory
     cd "$SPECKIT_PATH"
 
-    # 檢查是否有未提交的變更
+    # Check for uncommitted changes
     if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        log_warning "spec-kit 有未提交的變更，跳過自動更新"
-        log_info "請先手動處理: cd $SPECKIT_PATH && git status"
+        log_warning "spec-kit has uncommitted changes, skipping auto-update"
+        log_info "Please handle manually: cd $SPECKIT_PATH && git status"
         cd - >/dev/null
         return 0
     fi
 
-    # 獲取當前分支
+    # Get current branch
     local current_branch=$(git rev-parse --abbrev-ref HEAD)
 
-    # fetch 最新版本
+    # Fetch latest version
     git fetch origin --quiet 2>/dev/null || {
-        log_warning "無法連接到遠端倉庫，使用本地版本"
+        log_warning "Cannot connect to remote repository, using local version"
         cd - >/dev/null
         return 0
     }
 
-    # 檢查是否有更新
+    # Check for updates
     local local_commit=$(git rev-parse HEAD)
     local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null || echo "$local_commit")
 
     if [ "$local_commit" != "$remote_commit" ]; then
-        log_info "發現 spec-kit 新版本，正在更新..."
+        log_info "Found spec-kit update, updating..."
 
-        # 顯示版本變更
+        # Show version change
         local old_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
 
         if git pull origin $current_branch --quiet; then
             local new_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-            log_success "spec-kit 已更新: $old_version → $new_version"
+            log_success "spec-kit updated: $old_version → $new_version"
         else
-            log_error "spec-kit 更新失敗"
+            log_error "spec-kit update failed"
             cd - >/dev/null
             return 1
         fi
     else
         local version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-        log_success "spec-kit 已是最新版本 ($version)"
+        log_success "spec-kit is up to date ($version)"
     fi
 
     cd - >/dev/null
@@ -220,66 +218,67 @@ update_speckit_repo() {
 batch_sync() {
     local mode="${1:-interactive}"
 
-    log_header "批次同步 Spec-Kit 命令"
+    log_header "Batch Sync Spec-Kit Commands"
 
-    # 自動更新 spec-kit 倉庫
+    # Auto-update spec-kit repository
     update_speckit_repo
     echo ""
 
-    # 如果沒有指定專案，自動掃描
+    # If no projects specified, auto-scan
     if [ ${#PROJECTS[@]} -eq 0 ]; then
+        log_info "Scanning for projects in $GITHUB_DIR..."
         PROJECTS=($(scan_projects))
     fi
 
     if [ ${#PROJECTS[@]} -eq 0 ]; then
-        log_error "未找到任何包含 .claude/commands 的專案"
+        log_error "No projects found with .claude/commands directory"
         exit 1
     fi
 
-    log_success "發現 ${#PROJECTS[@]} 個專案"
+    log_success "Found ${#PROJECTS[@]} project(s)"
     echo ""
 
-    # 顯示專案列表
-    echo "專案列表："
+    # Display project list
+    echo "Project list:"
     local index=1
     for project in "${PROJECTS[@]}"; do
         echo "  $index. $project"
-        ((index++))
+        index=$((index + 1))
     done
 
     echo ""
 
-    # 統計
+    # Statistics
     local total=${#PROJECTS[@]}
     local success=0
     local skipped=0
     local failed=0
 
-    # 處理每個專案
+    # Process each project
     for project in "${PROJECTS[@]}"; do
         if process_project "$project" "$mode"; then
-            ((success++))
+            success=$((success + 1))
         else
-            ((skipped++))
+            skipped=$((skipped + 1))
         fi
     done
 
-    # 顯示總結
-    log_header "批次同步完成"
+    # Show summary
+    log_header "Batch Sync Complete"
     echo ""
-    echo "📊 統計："
-    echo "  ✅ 成功: $success 個專案"
-    echo "  ⏭️  跳過: $skipped 個專案"
-    echo "  ❌ 失敗: $failed 個專案"
+    echo "📊 Statistics:"
+    echo "  ✅ Success: $success project(s)"
+    echo "  ⏭️  Skipped: $skipped project(s)"
+    echo "  ❌ Failed: $failed project(s)"
     echo "  ═══════════════"
-    echo "  📦 總計: $total 個專案"
+    echo "  📦 Total: $total project(s)"
 }
 
 # ============================================================================
-# 特定專案列表配置範例
+# Specific project list configuration example
 # ============================================================================
 
-# 取消註釋並自訂你要同步的專案
+# Uncomment and customize the projects you want to sync
 # PROJECTS=(
 #     "bni-system"
 #     "article_writing"
@@ -289,40 +288,40 @@ batch_sync() {
 # )
 
 # ============================================================================
-# 主程式
+# Main program
 # ============================================================================
 
 show_usage() {
     cat << EOF
-${CYAN}批次同步 Spec-Kit 命令工具${NC}
+${CYAN}Batch Sync Spec-Kit Commands Tool${NC}
 
-使用方式:
+Usage:
     $0 [options]
 
-選項:
-    --auto              自動模式（不詢問，自動更新）
-    --check-only        僅檢查，不更新
-    --help              顯示此幫助訊息
+Options:
+    --auto              Auto mode (no prompts, auto-update)
+    --check-only        Check only, no updates
+    --help              Show this help message
 
-環境變數:
-    GITHUB_DIR          GitHub 專案目錄 (預設: ~/Documents/GitHub)
-    SPECKIT_PATH        spec-kit 倉庫路徑 (預設: \$GITHUB_DIR/spec-kit)
+Environment variables:
+    GITHUB_DIR          GitHub projects directory (default: ~/Documents/GitHub)
+    SPECKIT_PATH        spec-kit repository path (default: \$GITHUB_DIR/spec-kit)
 
-範例:
-    # 互動模式（逐個詢問）
+Examples:
+    # Interactive mode (prompt for each project)
     $0
 
-    # 自動模式（不詢問，直接更新）
+    # Auto mode (no prompts, update directly)
     $0 --auto
 
-    # 僅檢查模式（顯示狀態，不更新）
+    # Check-only mode (show status, no updates)
     $0 --check-only
 
-    # 自訂 GitHub 目錄
+    # Custom GitHub directory
     GITHUB_DIR=/custom/path $0
 
-自訂專案列表:
-    編輯此腳本，設定 PROJECTS 變數：
+Custom project list:
+    Edit this script and set the PROJECTS variable:
 
     PROJECTS=(
         "project1"
@@ -336,7 +335,7 @@ EOF
 main() {
     local mode="interactive"
 
-    # 解析參數
+    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --auto)
@@ -352,7 +351,7 @@ main() {
                 exit 0
                 ;;
             *)
-                log_error "未知選項: $1"
+                log_error "Unknown option: $1"
                 echo ""
                 show_usage
                 exit 1
@@ -360,20 +359,20 @@ main() {
         esac
     done
 
-    # 檢查同步工具是否存在
+    # Check if sync tool exists
     if [ ! -f "$SYNC_TOOL" ]; then
-        log_error "找不到同步工具: $SYNC_TOOL"
+        log_error "Sync tool not found: $SYNC_TOOL"
         exit 1
     fi
 
-    # 檢查 GitHub 目錄是否存在
+    # Check if GitHub directory exists
     if [ ! -d "$GITHUB_DIR" ]; then
-        log_error "GitHub 目錄不存在: $GITHUB_DIR"
-        log_info "請設定正確的 GITHUB_DIR 環境變數"
+        log_error "GitHub directory does not exist: $GITHUB_DIR"
+        log_info "Please set the correct GITHUB_DIR environment variable"
         exit 1
     fi
 
-    # 執行批次同步
+    # Execute batch sync
     batch_sync "$mode"
 }
 
