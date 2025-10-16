@@ -1,303 +1,309 @@
 # Spec-Kit Sync Tool
 
-自動同步 [GitHub spec-kit](https://github.com/github/spec-kit) 命令與模版到多個專案的整合工具。
+> **Language**: [English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
 
-> **注意**：這是一個獨立的同步工具，不隸屬於官方 spec-kit 專案。
+Automated tool to sync [GitHub spec-kit](https://github.com/github/spec-kit) commands and templates across multiple projects with support for 13+ AI coding agents.
 
-## ✨ 核心功能
+> **Note**: This is an independent sync tool, not affiliated with the official spec-kit project.
 
-### 🚀 Phase 1: 動態命令掃描
-- ✅ **自動發現新命令**：不再寫死命令列表，自動偵測 spec-kit 的新命令
-- ✅ **互動式選擇**：發現新命令時可選擇是否加入同步
-- ✅ **命令描述解析**：從 YAML frontmatter 自動提取命令描述
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/frankekn/speckit-sync-tool/releases)
+[![Bash](https://img.shields.io/badge/bash-5.0+-green.svg)](https://www.gnu.org/software/bash/)
 
-### 🤖 Phase 2: 多代理支援
-- ✅ **13 種 AI 代理**：支援 Claude, Cursor, Copilot, Gemini, Windsurf 等
-- ✅ **自動偵測**：掃描專案中已安裝的代理
-- ✅ **獨立狀態管理**：每個代理獨立追蹤同步狀態
-- ✅ **批次或單獨更新**：可一次更新所有代理或指定特定代理
+## ✨ Core Features
 
-### 📄 Phase 3: 模版同步
-- ✅ **spec-kit 模版支援**：同步官方模版檔案
-- ✅ **選擇性同步**：互動式選擇要同步的模版
-- ✅ **獨立管理**：模版與命令分開管理
+### 🚀 Phase 1: Dynamic Command Scanning
+- ✅ **Auto-discover new commands**: No hardcoded command lists, automatically detects new spec-kit commands
+- ✅ **Interactive selection**: Choose which new commands to sync when discovered
+- ✅ **Command description parsing**: Auto-extracts descriptions from YAML frontmatter
 
-### 🔄 通用功能
-- ✅ **自動更新 spec-kit**：每次同步前自動檢查並更新 spec-kit 倉庫
-- ✅ **自動備份**：更新前自動備份，支援回滾
-- ✅ **配置自動升級**：v1.0.0 → v2.1.0 自動遷移
-- ✅ **批次處理**：一次處理多個專案
+### 🤖 Phase 2: Multi-Agent Support
+- ✅ **13+ AI agents**: Support for Claude, Cursor, Copilot, Gemini, Windsurf, and more
+- ✅ **Auto-detection**: Scans projects for installed agents
+- ✅ **Independent state management**: Each agent tracks sync status independently
+- ✅ **Batch or individual updates**: Update all agents at once or target specific ones
 
-## 🎯 為什麼需要這個工具？
+### 📄 Phase 3: Template Sync
+- ✅ **spec-kit template support**: Sync official template files
+- ✅ **Selective sync**: Interactive selection of templates to sync
+- ✅ **Independent management**: Templates and commands managed separately
 
-當你有多個專案使用 spec-kit 的命令時，手動更新每個專案非常麻煩。這個工具可以：
+### 🔄 Universal Features
+- ✅ **Auto-update spec-kit**: Automatically checks and updates spec-kit repository before syncing
+- ✅ **Auto-backup**: Creates backups before updates with rollback support
+- ✅ **Config auto-upgrade**: Automatic migration from v1.0.0 → v2.1.0
+- ✅ **Batch processing**: Process multiple projects at once
 
-- **自動同步**：spec-kit 更新時自動偵測並同步到所有專案
-- **多代理支援**：同時管理 Claude、Cursor、Copilot 等多種 AI 代理
-- **安全可靠**：自動備份、差異顯示、保護自訂命令
-- **批次操作**：一次處理多個專案，省時省力
+## 🎯 Why This Tool?
 
-## 📦 安裝
+When you have multiple projects using spec-kit commands, manually updating each project is tedious. This tool helps you:
 
-### 方式 1：Git Clone（推薦）
+- **Automatic sync**: Auto-detect and sync spec-kit updates across all projects
+- **Multi-agent support**: Manage Claude, Cursor, Copilot, and more in one place
+- **Safe and reliable**: Auto-backup, diff display, protect custom commands
+- **Batch operations**: Process multiple projects at once, save time
+
+## 📦 Installation
+
+### Method 1: Git Clone (Recommended)
 
 ```bash
-# Clone 此倉庫
+# Clone this repository
 cd ~/Documents/GitHub
-git clone https://github.com/your-username/speckit-sync-tool.git
+git clone https://github.com/frankekn/speckit-sync-tool.git
 
-# 全局安裝（可選）
+# Global installation (optional)
 cd speckit-sync-tool
 ./install.sh
 ```
 
-### 方式 2：直接下載
+### Method 2: Direct Download
 
-下載這個倉庫的 zip 檔案並解壓到任意位置。
+Download the repository ZIP file and extract to any location.
 
-## 🚀 快速開始
+## 🚀 Quick Start
 
-### 使用整合版本（推薦，包含所有功能）
+### Using Integrated Version (Recommended, includes all features)
 
 ```bash
-# 1. 進入你的專案
+# 1. Navigate to your project
 cd ~/Documents/GitHub/my-project
 
-# 2. 初始化（會自動偵測代理）
+# 2. Initialize (auto-detects agents)
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh init
 
-# 3. 檢查更新
+# 3. Check for updates
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh check
 
-# 4. 執行同步
+# 4. Execute sync
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh update
 
-# 5. 選擇並同步模版（可選）
+# 5. Select and sync templates (optional)
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates select
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates sync
 ```
 
-### 使用基礎版本（僅 Claude）
+### Using Basic Version (Claude only)
 
 ```bash
-# 如果只需要同步 Claude 的命令
+# If you only need Claude command sync
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh init
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh check
 ~/Documents/GitHub/speckit-sync-tool/sync-commands.sh update
 ```
 
-### 批次同步多個專案
+### Batch Sync Multiple Projects
 
 ```bash
-# 自動掃描並同步所有專案
+# Auto-scan and sync all projects
 ~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh
 
-# 或自動模式（不詢問）
+# Or auto mode (no prompts)
 ~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --auto
 ```
 
-### 使用全局命令（需先安裝）
+### Using Global Commands (requires installation)
 
 ```bash
-# 任何專案目錄都可以使用
+# Available in any project directory
 cd ~/Documents/GitHub/any-project
 speckit-sync init
 speckit-sync check
 speckit-sync update
 ```
 
-> **💡 提示**：每次執行 `check` 或 `update` 時，工具會自動檢查 spec-kit 是否有新版本，並自動執行 `git pull`。你不需要手動更新！
+> **💡 Tip**: Each time you run `check` or `update`, the tool automatically checks if spec-kit has a new version and performs `git pull`. No manual updates needed!
 
-## 📚 完整功能指南
+## 📚 Complete Feature Guide
 
-### 整合版命令列表
+### Integrated Version Commands
 
-#### 基礎命令
+#### Basic Commands
 
 ```bash
-# 初始化配置（會偵測所有代理）
+# Initialize configuration (detects all agents)
 ./sync-commands-integrated.sh init
 
-# 偵測可用的 AI 代理
+# Detect available AI agents
 ./sync-commands-integrated.sh detect-agents
 
-# 檢查所有代理的更新
+# Check updates for all agents
 ./sync-commands-integrated.sh check
 
-# 檢查特定代理
+# Check specific agent
 ./sync-commands-integrated.sh check --agent claude
 
-# 更新所有代理
+# Update all agents
 ./sync-commands-integrated.sh update
 
-# 更新特定代理
+# Update specific agent
 ./sync-commands-integrated.sh update --agent cursor
 
-# 顯示配置狀態
+# Display configuration status
 ./sync-commands-integrated.sh status
 ```
 
-#### 動態命令掃描
+#### Dynamic Command Scanning
 
 ```bash
-# 掃描並添加新命令（需指定代理）
+# Scan and add new commands (requires agent)
 ./sync-commands-integrated.sh scan --agent claude
 ```
 
-#### 模版管理
+#### Template Management
 
 ```bash
-# 列出可用模版
+# List available templates
 ./sync-commands-integrated.sh templates list
 
-# 選擇要同步的模版
+# Select templates to sync
 ./sync-commands-integrated.sh templates select
 
-# 同步已選擇的模版
+# Sync selected templates
 ./sync-commands-integrated.sh templates sync
 ```
 
-#### 配置管理
+#### Configuration Management
 
 ```bash
-# 升級配置檔案版本
+# Upgrade configuration version
 ./sync-commands-integrated.sh upgrade
 ```
 
-### 支援的 AI 代理
+### Supported AI Agents
 
-| 代理名稱 | 命令目錄 | 偵測方式 |
-|---------|---------|---------|
-| Claude Code | `.claude/commands` | 自動 |
-| Cursor | `.cursor/commands` | 自動 |
-| GitHub Copilot | `.github/prompts` | 自動 |
-| Gemini CLI | `.gemini/commands` | 自動 |
-| Windsurf | `.windsurf/workflows` | 自動 |
-| Qwen Code | `.qwen/commands` | 自動 |
-| opencode | `.opencode/commands` | 自動 |
-| Codex CLI | `.codex/commands` | 自動 |
-| Kilo Code | `.kilocode/commands` | 自動 |
-| Auggie CLI | `.augment/commands` | 自動 |
-| CodeBuddy CLI | `.codebuddy/commands` | 自動 |
-| Roo Code | `.roo/commands` | 自動 |
-| Amazon Q | `.amazonq/commands` | 自動 |
+| Agent Name | Command Directory | Detection |
+|-----------|------------------|-----------|
+| Claude Code | `.claude/commands` | Auto |
+| Cursor | `.cursor/commands` | Auto |
+| GitHub Copilot | `.github/prompts` | Auto |
+| Gemini CLI | `.gemini/commands` | Auto |
+| Windsurf | `.windsurf/workflows` | Auto |
+| Qwen Code | `.qwen/commands` | Auto |
+| opencode | `.opencode/commands` | Auto |
+| Codex CLI | `.codex/commands` | Auto |
+| Kilo Code | `.kilocode/commands` | Auto |
+| Auggie CLI | `.augment/commands` | Auto |
+| CodeBuddy CLI | `.codebuddy/commands` | Auto |
+| Roo Code | `.roo/commands` | Auto |
+| Amazon Q | `.amazonq/commands` | Auto |
 
-### 環境變數
+### Environment Variables
 
 ```bash
-# 設定 spec-kit 路徑
+# Set spec-kit path
 export SPECKIT_PATH=/custom/path/to/spec-kit
 
-# 設定 GitHub 目錄（批次處理用）
+# Set GitHub directory (for batch processing)
 export GITHUB_DIR=/custom/path/to/github
 ```
 
-## 📖 詳細使用範例
+## 📖 Detailed Usage Examples
 
-### 情境 1：新專案初始化
+### Scenario 1: New Project Initialization
 
 ```bash
 cd my-new-project
 
-# 初始化配置，工具會自動偵測專案中的代理
+# Initialize configuration, tool auto-detects agents in project
 ~/speckit-sync-tool/sync-commands-integrated.sh init
 
-# 輸出：
-# 偵測 AI 代理
+# Output:
+# Detecting AI Agents
 # ✓ Claude Code (.claude/commands)
 # ✓ Cursor (.cursor/commands)
 #
-# 選擇要啟用的代理（空格鍵選擇，Enter 確認）：
+# Select agents to enable (Space to select, Enter to confirm):
 # [1] Claude Code (.claude/commands) [Y/n] y
 # [2] Cursor (.cursor/commands) [Y/n] y
 #
-# 偵測到 8 個標準命令
-# ✓ 初始化完成！
+# Detected 8 standard commands
+# ✓ Initialization complete!
 ```
 
-### 情境 2：定期更新檢查
+### Scenario 2: Regular Update Checks
 
 ```bash
-# 檢查所有代理的更新
+# Check updates for all agents
 ./sync-commands-integrated.sh check
 
-# 輸出：
-# 檢查 Claude Code 更新
-# ℹ spec-kit 已是最新版本 (0.0.20)
+# Output:
+# Checking Claude Code Updates
+# ℹ spec-kit is up to date (0.0.20)
 #
-# ✓ analyze.md - 已是最新
-# ✓ checklist.md - 已是最新
-# ↻ implement.md - 有更新可用
-# ⊕ new-command.md - 本地不存在（新命令）
+# ✓ analyze.md - up to date
+# ✓ checklist.md - up to date
+# ↻ implement.md - update available
+# ⊕ new-command.md - not found locally (new command)
 #
-# 統計：
-#   ✅ 已同步: 6
-#   ⊕  缺少: 1
-#   ↻  過時: 1
+# Statistics:
+#   ✅ Synced: 6
+#   ⊕  Missing: 1
+#   ↻  Outdated: 1
 #
-# ⚠ 發現 2 個命令需要更新
+# ⚠ Found 2 commands requiring update
 ```
 
-### 情境 3：掃描新命令
+### Scenario 3: Scanning New Commands
 
 ```bash
-# 掃描 spec-kit 中的新命令
+# Scan spec-kit for new commands
 ./sync-commands-integrated.sh scan --agent claude
 
-# 輸出：
-# 掃描新命令 (claude)
-# ℹ 發現 2 個新命令：
-#   ⊕ refactor.md - 程式碼重構
-#   ⊕ review.md - 程式碼審查
+# Output:
+# Scanning New Commands (claude)
+# ℹ Found 2 new commands:
+#   ⊕ refactor.md - Code refactoring
+#   ⊕ review.md - Code review
 #
-# 是否要將這些新命令加入同步列表？[y/N] y
-# ✓ 已添加 2 個新命令到配置
+# Add these new commands to sync list? [y/N] y
+# ✓ Added 2 new commands to configuration
 ```
 
-### 情境 4：模版同步
+### Scenario 4: Template Sync
 
 ```bash
-# 列出可用模版
+# List available templates
 ./sync-commands-integrated.sh templates list
 
-# 輸出：
-# 可用模版列表
+# Output:
+# Available Templates
 #
 # [ 1]   spec-template.md
 # [ 2]   plan-template.md
 # [ 3]   tasks-template.md
 # [ 4] ✓ checklist-template.md
 
-# 選擇要同步的模版
+# Select templates to sync
 ./sync-commands-integrated.sh templates select
 
-# 同步已選擇的模版
+# Sync selected templates
 ./sync-commands-integrated.sh templates sync
-# ✓ spec-template.md - 已同步
-# ✓ plan-template.md - 已同步
-# ✓ 共同步 2 個模版到 .claude/templates
+# ✓ spec-template.md - synced
+# ✓ plan-template.md - synced
+# ✓ Synced 2 templates to .claude/templates
 ```
 
-### 情境 5：多代理管理
+### Scenario 5: Multi-Agent Management
 
 ```bash
-# 只更新 Claude 代理
+# Update only Claude agent
 ./sync-commands-integrated.sh update --agent claude
 
-# 更新所有啟用的代理
+# Update all enabled agents
 ./sync-commands-integrated.sh update
 
-# 輸出：
-# 同步 Claude Code 命令
-# ... (Claude 同步結果)
+# Output:
+# Syncing Claude Code Commands
+# ... (Claude sync results)
 #
-# 同步 Cursor 命令
-# ... (Cursor 同步結果)
+# Syncing Cursor Commands
+# ... (Cursor sync results)
 ```
 
-## ⚙️ 配置檔案
+## ⚙️ Configuration File
 
-### v2.1.0 配置結構（整合版）
+### v2.1.0 Configuration Structure (Integrated Version)
 
 ```json
 {
@@ -345,40 +351,40 @@ cd my-new-project
 }
 ```
 
-### 配置版本升級路徑
+### Configuration Version Upgrade Path
 
-工具會自動升級配置版本，無需手動操作：
+Tool automatically upgrades configuration versions, no manual operation needed:
 
 ```
-v1.0.0 (基礎版)
+v1.0.0 (Basic)
   ↓
-v1.1.0 (+ 動態掃描)
+v1.1.0 (+ Dynamic Scanning)
   ↓
-v2.0.0 (+ 多代理)
+v2.0.0 (+ Multi-Agent)
   ↓
-v2.1.0 (+ 模版)
+v2.1.0 (+ Templates)
 ```
 
-## 💡 最佳實踐
+## 💡 Best Practices
 
-### 1. 使用整合版本
+### 1. Use Integrated Version
 
 ```bash
-# 推薦使用整合版本，獲得所有功能
+# Recommend using integrated version for all features
 ln -s ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh ~/bin/speckit-sync
 ```
 
-### 2. 定期檢查更新
+### 2. Regular Update Checks
 
 ```bash
-# 建議每週執行一次
+# Recommend running weekly
 cd ~/Documents/GitHub
 ./speckit-sync-tool/batch-sync-all.sh --check-only
 ```
 
-### 3. 保護自訂命令
+### 3. Protect Custom Commands
 
-在配置中標記你的自訂命令：
+Mark your custom commands in configuration:
 
 ```json
 {
@@ -395,77 +401,80 @@ cd ~/Documents/GitHub
 }
 ```
 
-### 4. 多代理同步策略
+### 4. Multi-Agent Sync Strategy
 
 ```bash
-# 方案A：所有代理使用相同命令（推薦）
+# Option A: All agents use same commands (recommended)
 ./sync-commands-integrated.sh update
 
-# 方案B：不同代理獨立管理
+# Option B: Different agents managed independently
 ./sync-commands-integrated.sh update --agent claude
 ./sync-commands-integrated.sh update --agent cursor
 ```
 
-### 5. 模版管理
+### 5. Template Management
 
 ```bash
-# 只同步你需要的模版
+# Only sync templates you need
 ./sync-commands-integrated.sh templates select
-# 選擇 spec-template.md 和 plan-template.md
+# Select spec-template.md and plan-template.md
 
-# 需要時再同步
+# Sync when needed
 ./sync-commands-integrated.sh templates sync
 ```
 
-### 6. 備份與回滾
+### 6. Backup and Rollback
 
 ```bash
-# 備份位置（每次更新自動建立）
+# Backup location (auto-created on each update)
 ls .claude/commands/.backup/
 
-# 回滾到特定版本
+# Rollback to specific version
 cp .claude/commands/.backup/20251016_120000/*.md .claude/commands/
 ```
 
-## 📊 專案結構
+## 📊 Project Structure
 
 ```
 speckit-sync-tool/
-├── sync-commands-integrated.sh  # 整合版 v2.1.0（推薦）
-├── sync-commands-enhanced.sh    # Phase 1 版本 v1.1.0
-├── sync-commands-v2.sh          # Phase 2 版本 v2.0.0
-├── template-sync.sh             # Phase 3 版本 v2.1.0
-├── sync-commands.sh             # 基礎版本 v1.0.0
-├── batch-sync-all.sh            # 批次處理工具
-├── install.sh                   # 全局安裝腳本
-├── test-phase1.sh               # Phase 1 測試套件
-├── .speckit-sync.json.template  # 配置檔案範本
-├── Makefile.template            # Makefile 範本
-├── LICENSE                      # MIT 授權
-├── README.md                    # 本文檔
-├── DELIVERY_SUMMARY.md          # 交付檔案總覽
+├── sync-commands-integrated.sh  # Integrated v2.1.0 (recommended)
+├── sync-commands-enhanced.sh    # Phase 1 v1.1.0
+├── sync-commands-v2.sh          # Phase 2 v2.0.0
+├── template-sync.sh             # Phase 3 v2.1.0
+├── sync-commands.sh             # Basic v1.0.0
+├── batch-sync-all.sh            # Batch processing tool
+├── install.sh                   # Global installation script
+├── test-phase1.sh               # Phase 1 test suite
+├── .speckit-sync.json.template  # Config file template
+├── Makefile.template            # Makefile template
+├── LICENSE                      # MIT License
+├── README.md                    # This document
+├── README.zh-TW.md              # Traditional Chinese
+├── README.zh-CN.md              # Simplified Chinese
+├── DELIVERY_SUMMARY.md          # Delivery file overview
+├── TEST_REPORT_FINAL.md         # Comprehensive test report
 └── docs/
-    ├── phase1/                  # Phase 1 文檔
+    ├── phase1/                  # Phase 1 documentation
     │   ├── QUICKSTART_v1.1.md
     │   ├── PHASE1_SUMMARY.md
     │   └── ...
-    ├── phase2/                  # Phase 2 文檔
+    ├── phase2/                  # Phase 2 documentation
     │   ├── speckit-sync-tool-phase2-architecture.md
     │   └── ...
-    └── phase3/                  # Phase 3 文檔
+    └── phase3/                  # Phase 3 documentation
         ├── README.template-sync.md
         └── ...
 ```
 
-## 🔧 進階使用
+## 🔧 Advanced Usage
 
-### 自訂 spec-kit 路徑
+### Custom spec-kit Path
 
 ```bash
 SPECKIT_PATH=/custom/path/to/spec-kit ./sync-commands-integrated.sh check
 ```
 
-### 整合到 CI/CD
+### CI/CD Integration
 
 ```yaml
 # .github/workflows/sync-speckit.yml
@@ -473,7 +482,7 @@ name: Sync Spec-Kit Commands
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # 每週一早上 9:00
+    - cron: '0 9 * * 1'  # Every Monday at 9:00 AM
   workflow_dispatch:
 
 jobs:
@@ -488,161 +497,162 @@ jobs:
           SPECKIT_PATH=/tmp/spec-kit ./sync-commands-integrated.sh check
 ```
 
-### 使用 Makefile 整合
+### Makefile Integration
 
 ```bash
-# 複製 Makefile 範本
+# Copy Makefile template
 cp ~/Documents/GitHub/speckit-sync-tool/Makefile.template my-project/.claude/Makefile
 
-# 在專案中使用
+# Use in project
 make -C .claude sync-check
 make -C .claude sync-update
 make -C .claude sync-status
 ```
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### 問題 1：找不到 spec-kit
+### Issue 1: spec-kit Not Found
 
 ```
-✗ spec-kit 路徑無效: /Users/termtek/Documents/GitHub/spec-kit
+✗ Invalid spec-kit path: /Users/termtek/Documents/GitHub/spec-kit
 ```
 
-**解決方法**：
+**Solution**:
 
 ```bash
-# 檢查 spec-kit 是否存在
+# Check if spec-kit exists
 ls ~/Documents/GitHub/spec-kit
 
-# 設定正確的路徑
+# Set correct path
 export SPECKIT_PATH=/correct/path/to/spec-kit
 ```
 
-### 問題 2：未偵測到代理
+### Issue 2: No Agents Detected
 
 ```
-✗ 未偵測到任何 AI 代理目錄
+✗ No AI agent directories detected
 ```
 
-**解決方法**：
+**Solution**:
 
 ```bash
-# 確保專案中有代理目錄
+# Ensure project has agent directories
 mkdir -p .claude/commands
-# 或
+# or
 mkdir -p .cursor/commands
 ```
 
-### 問題 3：權限錯誤
+### Issue 3: Permission Error
 
-**解決方法**：
+**Solution**:
 
 ```bash
 chmod +x ~/Documents/GitHub/speckit-sync-tool/*.sh
 ```
 
-### 問題 4：配置版本過舊
+### Issue 4: Outdated Configuration Version
 
-**解決方法**：
+**Solution**:
 
 ```bash
-# 自動升級配置
+# Auto-upgrade configuration
 ./sync-commands-integrated.sh upgrade
 ```
 
-### 問題 5：模版同步失敗
+### Issue 5: Template Sync Failed
 
-**解決方法**：
+**Solution**:
 
 ```bash
-# 檢查 spec-kit 是否有 templates 目錄
+# Check if spec-kit has templates directory
 ls $SPECKIT_PATH/templates
 
-# 如果沒有，spec-kit 可能尚未支援模版功能
+# If not present, spec-kit may not support templates yet
 ```
 
 ## ❓ FAQ
 
-**Q: 這個工具會修改 spec-kit 本身嗎？**
-A: 不會。這個工具只會讀取 spec-kit 的命令檔案，並自動更新（git pull）spec-kit 倉庫到最新版本。
+**Q: Will this tool modify spec-kit itself?**
+A: No. This tool only reads command files from spec-kit and auto-updates (git pull) the spec-kit repository to the latest version.
 
-**Q: 我的自訂命令會被覆蓋嗎？**
-A: 不會。工具只會同步標準命令（來自 spec-kit 的命令），你的自訂命令完全安全。可以在配置中標記為 "custom" 以明確區分。
+**Q: Will my custom commands be overwritten?**
+A: No. The tool only syncs standard commands (from spec-kit), your custom commands are completely safe. You can mark them as "custom" in configuration for explicit distinction.
 
-**Q: 如果我修改了標準命令怎麼辦？**
-A: 工具會偵測到差異並顯示為"過時"狀態。你可以：
-- 接受新版本：執行 update（會覆蓋你的修改）
-- 保留修改：在配置中標記為 "customized"
+**Q: What if I modified a standard command?**
+A: The tool will detect the difference and show it as "outdated" status. You can:
+- Accept new version: Run update (will overwrite your modifications)
+- Keep modifications: Mark as "customized" in configuration
 
-**Q: 支援哪些 AI 代理？**
-A: 目前支援 13 種：Claude Code, Cursor, GitHub Copilot, Gemini, Windsurf, Qwen, opencode, Codex, Kilocode, Auggie, CodeBuddy, Roo, Amazon Q。
+**Q: Which AI agents are supported?**
+A: Currently supports 13+: Claude Code, Cursor, GitHub Copilot, Gemini, Windsurf, Qwen, opencode, Codex, Kilocode, Auggie, CodeBuddy, Roo, Amazon Q.
 
-**Q: 可以同時使用多個代理嗎？**
-A: 可以！整合版本支援在同一專案中管理多個代理，每個代理獨立追蹤同步狀態。
+**Q: Can I use multiple agents simultaneously?**
+A: Yes! The integrated version supports managing multiple agents in the same project, each agent tracks sync status independently.
 
-**Q: spec-kit 新增命令後會自動偵測嗎？**
-A: 會！使用 `scan` 命令可以掃描 spec-kit 中的新命令，並互動式選擇是否加入同步列表。
+**Q: Will new commands in spec-kit be auto-detected?**
+A: Yes! Use the `scan` command to scan for new commands in spec-kit and interactively choose whether to add them to the sync list.
 
-**Q: 模版功能是什麼？**
-A: 模版功能可以同步 spec-kit 的模版檔案（如 spec-template.md），讓你在建立新文檔時有標準格式可以參考。
+**Q: What is the template feature?**
+A: The template feature syncs spec-kit template files (like spec-template.md), giving you standard formats to reference when creating new documents.
 
-**Q: 可以鎖定特定版本嗎？**
-A: 目前不支援版本鎖定，但你可以不執行 update 來保持當前版本。spec-kit 會自動更新到最新版本。
+**Q: Can I lock to a specific version?**
+A: Currently doesn't support version locking, but you can avoid running update to keep the current version. spec-kit will auto-update to the latest version.
 
-**Q: 支援 Windows 嗎？**
-A: 支援。在 Git Bash 或 WSL 中執行即可。
+**Q: Does it support Windows?**
+A: Yes. Run in Git Bash or WSL.
 
-**Q: 應該使用哪個版本？**
-A: 建議使用 `sync-commands-integrated.sh`（整合版），它包含所有功能。如果只需要基礎功能，可以使用 `sync-commands.sh`。
+**Q: Which version should I use?**
+A: Recommend using `sync-commands-integrated.sh` (integrated version), it includes all features. If you only need basic functionality, use `sync-commands.sh`.
 
-## 🤝 貢獻
+## 🤝 Contributing
 
-歡迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 📄 授權
+## 📄 License
 
 MIT License
 
-## 🔗 相關連結
+## 🔗 Related Links
 
-- [GitHub spec-kit](https://github.com/github/spec-kit) - 官方 spec-kit 專案
-- [Spec-Driven Development](https://github.com/github/spec-kit/blob/main/spec-driven.md) - 方法論說明
+- [GitHub spec-kit](https://github.com/github/spec-kit) - Official spec-kit project
+- [Spec-Driven Development](https://github.com/github/spec-kit/blob/main/spec-driven.md) - Methodology documentation
 
-## 📝 更新日誌
+## 📝 Changelog
 
-### v2.1.0 (2025-10-16) - 整合版本
+### v2.1.0 (2025-10-16) - Integrated Release
 
-- ✨ **整合所有功能**：將三個階段合併為單一工具
-- ✅ 動態命令掃描（Phase 1）
-- ✅ 13 種 AI 代理支援（Phase 2）
-- ✅ 模版同步功能（Phase 3）
-- ✅ 配置自動升級 (v1.0.0 → v2.1.0)
-- ✅ 統一 CLI 介面
-- ✅ 完整文檔與範例
+- ✨ **Integrate all features**: Merged three phases into single tool
+- ✅ Dynamic command scanning (Phase 1)
+- ✅ 13+ AI agent support (Phase 2)
+- ✅ Template sync functionality (Phase 3)
+- ✅ Config auto-upgrade (v1.0.0 → v2.1.0)
+- ✅ Unified CLI interface
+- ✅ Complete documentation and examples
+- 🐛 Fixed 6 critical bugs including loop exit issue
 
 ### v2.0.0 (2025-10-16) - Phase 2
 
-- ✨ 多代理支援
-- ✅ 13 種 AI 代理偵測與管理
-- ✅ 獨立代理狀態追蹤
-- ✅ 互動式代理選擇
+- ✨ Multi-agent support
+- ✅ 13 AI agent detection and management
+- ✅ Independent agent state tracking
+- ✅ Interactive agent selection
 
 ### v1.1.0 (2025-10-16) - Phase 1
 
-- ✨ 動態命令掃描
-- ✅ 自動發現新命令
-- ✅ 互動式新命令選擇
-- ✅ 命令描述自動解析
+- ✨ Dynamic command scanning
+- ✅ Auto-discover new commands
+- ✅ Interactive new command selection
+- ✅ Command description auto-parsing
 
-### v1.0.0 (2025-10-16) - 初始版本
+### v1.0.0 (2025-10-16) - Initial Release
 
-- ✨ 基礎功能實作
-- ✅ 單一專案同步（Claude）
-- ✅ 批次處理多專案
-- ✅ 自動備份和回滾
-- ✅ 差異顯示
-- ✅ 自動更新 spec-kit
-- ✅ 全局安裝支援
+- ✨ Basic functionality implementation
+- ✅ Single project sync (Claude)
+- ✅ Batch processing for multiple projects
+- ✅ Auto-backup and rollback
+- ✅ Diff display
+- ✅ Auto-update spec-kit
+- ✅ Global installation support
 
 ---
 
