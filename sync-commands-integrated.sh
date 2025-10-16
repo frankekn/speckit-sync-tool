@@ -882,8 +882,8 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 命令:
     init                         初始化配置
     detect-agents                偵測可用的 AI 代理
-    check [--agent <name>]       檢查更新狀態
-    update [--agent <name>]      執行命令同步
+    check [options]              檢查更新狀態
+    update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
 
     templates list               列出可用模版
@@ -895,6 +895,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
 選項:
     --agent <name>               指定要操作的代理
+    --all-agents                 自動偵測並處理所有代理（忽略配置檔啟用狀態）
     --help                       顯示此幫助訊息
 
 環境變數:
@@ -904,14 +905,20 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     # 初始化配置
     $0 init
 
-    # 檢查所有代理的更新
+    # 檢查配置中啟用的代理
     $0 check
+
+    # 檢查所有偵測到的代理（不管是否啟用）
+    $0 check --all-agents
 
     # 只檢查 claude 代理
     $0 check --agent claude
 
-    # 更新所有代理
+    # 更新配置中啟用的代理
     $0 update
+
+    # 更新所有偵測到的代理
+    $0 update --all-agents
 
     # 掃描新命令
     $0 scan
@@ -976,6 +983,7 @@ main() {
     local command="${1:-}"
     local subcommand="${2:-}"
     local agent=""
+    local all_agents=false
 
     # 解析參數
     shift || true
@@ -984,6 +992,10 @@ main() {
             --agent)
                 agent="$2"
                 shift 2
+                ;;
+            --all-agents)
+                all_agents=true
+                shift
                 ;;
             --help|-h)
                 show_usage
@@ -1006,6 +1018,23 @@ main() {
         check)
             if [[ -n "$agent" ]]; then
                 check_updates "$agent"
+            elif [[ "$all_agents" == true ]]; then
+                # 檢查所有偵測到的代理（不管配置中是否啟用）
+                log_info "偵測所有代理並檢查更新..."
+                local detected_agents=($(detect_agents_quiet))
+
+                if [[ ${#detected_agents[@]} -eq 0 ]]; then
+                    log_warning "未偵測到任何 AI 代理目錄"
+                    return 1
+                fi
+
+                log_info "發現 ${#detected_agents[@]} 個代理"
+                echo ""
+
+                for ag in "${detected_agents[@]}"; do
+                    check_updates "$ag"
+                    echo ""
+                done
             else
                 # 檢查所有啟用的代理
                 local config=$(load_config)
@@ -1021,6 +1050,23 @@ main() {
         update)
             if [[ -n "$agent" ]]; then
                 update_commands "$agent"
+            elif [[ "$all_agents" == true ]]; then
+                # 更新所有偵測到的代理（不管配置中是否啟用）
+                log_info "偵測所有代理並更新..."
+                local detected_agents=($(detect_agents_quiet))
+
+                if [[ ${#detected_agents[@]} -eq 0 ]]; then
+                    log_warning "未偵測到任何 AI 代理目錄"
+                    return 1
+                fi
+
+                log_info "發現 ${#detected_agents[@]} 個代理"
+                echo ""
+
+                for ag in "${detected_agents[@]}"; do
+                    update_commands "$ag"
+                    echo ""
+                done
             else
                 # 更新所有啟用的代理
                 local config=$(load_config)
