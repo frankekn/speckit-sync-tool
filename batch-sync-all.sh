@@ -92,6 +92,23 @@ log_verbose() {
 scan_projects() {
     local found_projects=()
 
+    # All supported AI agent CLI directories
+    local agent_dirs=(
+        ".claude/commands"
+        ".github/prompts"
+        ".gemini/commands"
+        ".cursor/commands"
+        ".qwen/commands"
+        ".opencode/commands"
+        ".codex/commands"
+        ".windsurf/workflows"
+        ".kilocode/commands"
+        ".augment/commands"
+        ".codebuddy/commands"
+        ".roo/commands"
+        ".amazonq/commands"
+    )
+
     for dir in "$GITHUB_DIR"/*; do
         [ -d "$dir" ] || continue
 
@@ -102,8 +119,16 @@ scan_projects() {
             continue
         fi
 
-        # Check if has .claude/commands directory
-        if [ -d "$dir/.claude/commands" ]; then
+        # Check if has any AI agent CLI directory
+        local has_agent=false
+        for agent_dir in "${agent_dirs[@]}"; do
+            if [ -d "$dir/$agent_dir" ]; then
+                has_agent=true
+                break
+            fi
+        done
+
+        if [ "$has_agent" = true ]; then
             found_projects+=("$project_name")
         fi
     done
@@ -189,6 +214,61 @@ process_project() {
     fi
 }
 
+compare_versions() {
+    local ver1="$1"
+    local ver2="$2"
+
+    # Remove v prefix
+    ver1="${ver1#v}"
+    ver2="${ver2#v}"
+
+    # Split version numbers
+    local v1_major=$(echo "$ver1" | cut -d. -f1)
+    local v1_minor=$(echo "$ver1" | cut -d. -f2)
+    local v1_patch=$(echo "$ver1" | cut -d. -f3)
+
+    local v2_major=$(echo "$ver2" | cut -d. -f1)
+    local v2_minor=$(echo "$ver2" | cut -d. -f2)
+    local v2_patch=$(echo "$ver2" | cut -d. -f3)
+
+    # Default to 0
+    v1_major=${v1_major:-0}
+    v1_minor=${v1_minor:-0}
+    v1_patch=${v1_patch:-0}
+    v2_major=${v2_major:-0}
+    v2_minor=${v2_minor:-0}
+    v2_patch=${v2_patch:-0}
+
+    # Compare major
+    if [[ "$v1_major" -gt "$v2_major" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_major" -lt "$v2_major" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    # Compare minor
+    if [[ "$v1_minor" -gt "$v2_minor" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_minor" -lt "$v2_minor" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    # Compare patch
+    if [[ "$v1_patch" -gt "$v2_patch" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_patch" -lt "$v2_patch" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    echo "="
+}
+
 update_speckit_repo() {
     # Check if it's a git repository
     if [ ! -d "$SPECKIT_PATH/.git" ]; then
@@ -209,37 +289,48 @@ update_speckit_repo() {
         return 0
     fi
 
-    # Get current branch
-    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+    # Get current tag (if on a tag) or commit
+    local current_tag=$(git describe --tags --exact-match 2>/dev/null || echo "")
 
-    # Fetch latest version
-    git fetch origin --quiet 2>/dev/null || {
-        log_warning "Cannot connect to remote repository, using local version"
+    # If not on a tag, try to get the nearest tag
+    if [[ -z "$current_tag" ]]; then
+        current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+    fi
+
+    # Get latest release from GitHub API
+    local latest_tag=$(curl -s https://api.github.com/repos/github/spec-kit/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+
+    if [[ -z "$latest_tag" ]]; then
+        log_warning "Cannot fetch latest version from GitHub, using local version"
+        log_info "Local version: $current_tag"
         cd - >/dev/null
         return 0
-    }
+    fi
 
-    # Check for updates
-    local local_commit=$(git rev-parse HEAD)
-    local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null || echo "$local_commit")
+    # Compare versions (remove v prefix)
+    local comparison=$(compare_versions "$current_tag" "$latest_tag")
 
-    if [ "$local_commit" != "$remote_commit" ]; then
-        log_info "Found spec-kit update, updating..."
+    if [[ "$comparison" == "<" ]]; then
+        log_info "Found new version: $current_tag → $latest_tag"
+        log_info "Updating to $latest_tag..."
 
-        # Show version change
-        local old_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
+        # Fetch tags
+        git fetch --tags --quiet 2>/dev/null || {
+            log_error "Cannot fetch tags"
+            cd - >/dev/null
+            return 1
+        }
 
-        if git pull origin $current_branch --quiet; then
-            local new_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-            log_success "spec-kit updated: $old_version → $new_version"
+        # Checkout to latest tag
+        if git checkout "$latest_tag" --quiet 2>/dev/null; then
+            log_success "spec-kit updated: $current_tag → $latest_tag"
         else
-            log_error "spec-kit update failed"
+            log_error "Cannot switch to $latest_tag"
             cd - >/dev/null
             return 1
         fi
     else
-        local version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-        log_success "spec-kit is up to date ($version)"
+        log_success "spec-kit is up to date ($current_tag)"
     fi
 
     cd - >/dev/null
@@ -261,7 +352,7 @@ batch_sync() {
     fi
 
     if [ ${#PROJECTS[@]} -eq 0 ]; then
-        log_error "No projects found with .claude/commands directory"
+        log_error "No projects found with AI agent CLI directories"
         exit 1
     fi
 
