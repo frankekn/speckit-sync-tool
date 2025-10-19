@@ -236,6 +236,62 @@ check_dependencies() {
 # spec-kit 自動更新
 # ==============================================================================
 
+# 版本比較函數 (semver: major.minor.patch)
+compare_versions() {
+    local ver1="$1"
+    local ver2="$2"
+
+    # 移除 v 前綴
+    ver1="${ver1#v}"
+    ver2="${ver2#v}"
+
+    # 分割版本號並轉換為陣列
+    local v1_major=$(echo "$ver1" | cut -d. -f1)
+    local v1_minor=$(echo "$ver1" | cut -d. -f2)
+    local v1_patch=$(echo "$ver1" | cut -d. -f3)
+
+    local v2_major=$(echo "$ver2" | cut -d. -f1)
+    local v2_minor=$(echo "$ver2" | cut -d. -f2)
+    local v2_patch=$(echo "$ver2" | cut -d. -f3)
+
+    # 預設值為 0
+    v1_major=${v1_major:-0}
+    v1_minor=${v1_minor:-0}
+    v1_patch=${v1_patch:-0}
+    v2_major=${v2_major:-0}
+    v2_minor=${v2_minor:-0}
+    v2_patch=${v2_patch:-0}
+
+    # 比較 major
+    if [[ "$v1_major" -gt "$v2_major" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_major" -lt "$v2_major" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    # 比較 minor
+    if [[ "$v1_minor" -gt "$v2_minor" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_minor" -lt "$v2_minor" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    # 比較 patch
+    if [[ "$v1_patch" -gt "$v2_patch" ]]; then
+        echo ">"
+        return 0
+    elif [[ "$v1_patch" -lt "$v2_patch" ]]; then
+        echo "<"
+        return 0
+    fi
+
+    echo "="
+}
+
 update_speckit_repo() {
     if [[ ! -d "$SPECKIT_PATH/.git" ]]; then
         log_warning "spec-kit 不是 git 倉庫，跳過自動更新"
@@ -253,36 +309,48 @@ update_speckit_repo() {
         return 0
     fi
 
-    # 獲取當前分支
-    local current_branch=$(git rev-parse --abbrev-ref HEAD)
+    # 獲取當前 tag（如果在 tag 上）或 commit
+    local current_tag=$(git describe --tags --exact-match 2>/dev/null || echo "")
 
-    # fetch 最新版本
-    git fetch origin --quiet 2>/dev/null || {
-        log_warning "無法連接到遠端倉庫，使用本地版本"
+    # 如果不在 tag 上，嘗試獲取最近的 tag
+    if [[ -z "$current_tag" ]]; then
+        current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+    fi
+
+    # 從 GitHub API 獲取最新 release 版本
+    local latest_tag=$(curl -s https://api.github.com/repos/github/spec-kit/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+
+    if [[ -z "$latest_tag" ]]; then
+        log_warning "無法從 GitHub 獲取最新版本，使用本地版本"
+        log_info "本地版本: $current_tag"
         cd - >/dev/null
         return 0
-    }
+    fi
 
-    # 檢查是否有更新
-    local local_commit=$(git rev-parse HEAD)
-    local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null || echo "$local_commit")
+    # 比較版本（移除 v 前綴）
+    local comparison=$(compare_versions "$current_tag" "$latest_tag")
 
-    if [[ "$local_commit" != "$remote_commit" ]]; then
-        log_info "發現 spec-kit 新版本，正在更新..."
+    if [[ "$comparison" == "<" ]]; then
+        log_info "發現新版本: $current_tag → $latest_tag"
+        log_info "正在更新到 $latest_tag..."
 
-        local old_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
+        # Fetch tags
+        git fetch --tags --quiet 2>/dev/null || {
+            log_error "無法 fetch tags"
+            cd - >/dev/null
+            return 1
+        }
 
-        if git pull origin "$current_branch" --quiet; then
-            local new_version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-            log_success "spec-kit 已更新: $old_version → $new_version"
+        # Checkout 到最新 tag
+        if git checkout "$latest_tag" --quiet 2>/dev/null; then
+            log_success "spec-kit 已更新: $current_tag → $latest_tag"
         else
-            log_error "spec-kit 更新失敗"
+            log_error "無法切換到 $latest_tag"
             cd - >/dev/null
             return 1
         fi
     else
-        local version=$(grep '^version' "$SPECKIT_PATH/pyproject.toml" | cut -d'"' -f2 2>/dev/null || echo "unknown")
-        log_success "spec-kit 已是最新版本 ($version)"
+        log_success "spec-kit 已是最新版本 ($current_tag)"
     fi
 
     cd - >/dev/null
@@ -650,43 +718,94 @@ templates_list() {
     done
 }
 
-templates_sync() {
-    log_header "同步模版"
+update_templates() {
+    local agent="$1"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    log_header "同步 ${AGENT_NAMES[$agent]} 模版"
 
     local config=$(load_config)
-    local sync_dir=$(echo "$config" | jq -r '.templates.sync_dir // ".claude/templates"')
-    local selected=$(echo "$config" | jq -r '.templates.selected[]' 2>/dev/null)
+    local commands_dir="${AGENTS[$agent]}"
 
-    # 確保目標目錄存在
-    dry_run_execute "建立模版同步目錄: $sync_dir" mkdir -p "$sync_dir"
+    # 從 commands 目錄中提取 agent 根目錄
+    # 例如: .claude/commands → .claude
+    local agent_root=$(dirname "$commands_dir")
+    local templates_dir="$PROJECT_ROOT/$agent_root/templates"
+
+    # 讀取 templates 到陣列中
+    local templates_array=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && templates_array+=("$line")
+    done < <(echo "$config" | jq -r ".agents.${agent}.templates.selected[]" 2>/dev/null)
+
+    # 建立目標目錄
+    dry_run_execute "建立模版目錄: $templates_dir" mkdir -p "$templates_dir" </dev/null
+
+    echo ""
 
     local synced=0
-    while IFS= read -r tpl; do
-        [[ -z "$tpl" ]] && continue
+    local added=0
+    local skipped=0
 
+    for tpl in "${templates_array[@]}"; do
         local src="$SPECKIT_TEMPLATES/$tpl"
-        local dest="$sync_dir/$tpl"
+        local dest="$templates_dir/$tpl"
 
         if [[ ! -f "$src" ]]; then
-            log_warning "$tpl - 來源檔案不存在"
+            log_warning "$tpl - 來源檔案不存在於 spec-kit"
+            : $((skipped++))
             continue
         fi
 
-        dry_run_execute "同步模版: $tpl → $dest" cp "$src" "$dest"
-        log_success "$tpl - 已同步"
-        ((synced++))
-    done <<< "$selected"
+        # 檢查檔案是否已存在且相同
+        if [[ -f "$dest" ]] && diff -q "$src" "$dest" >/dev/null 2>&1 </dev/null; then
+            log_info "$tpl - 已是最新"
+            : $((skipped++))
+        else
+            dry_run_execute "同步模版: $tpl" cp "$src" "$dest" </dev/null
+            if [[ -f "$dest" ]]; then
+                log_success "$tpl - 已更新"
+                : $((synced++))
+            else
+                log_success "$tpl - 已新增"
+                : $((added++))
+            fi
+        fi
+    done
 
     echo ""
-    log_success "共同步 $synced 個模版到 $sync_dir"
+    log_info "統計："
+    echo "  ✅ 已同步: $synced"
+    echo "  ⊕  新增: $added"
+    echo "  ⊙  跳過: $skipped"
+    echo "  ═══════════"
+    echo "  📦 總計: $((synced + added + skipped))"
 
     # 更新最後同步時間
-    config=$(echo "$config" | jq ".templates.last_sync = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"")
-    save_config "$config"
+    if [[ "$DRY_RUN" == false ]]; then
+        config=$(echo "$config" | jq --arg agent "$agent" \
+            ".agents[\$agent].templates.last_sync = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"")
+        save_config "$config"
+    fi
+
+    log_success "模版已同步到: $templates_dir"
 }
 
 templates_select() {
-    log_header "選擇要同步的模版"
+    local agent="$1"
+
+    # 防禦性檢查：確保代理存在
+    if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
+        log_error "未知代理: $agent"
+        return 1
+    fi
+
+    log_header "選擇 ${AGENT_NAMES[$agent]} 的模版"
 
     local templates=($(get_available_templates))
 
@@ -699,7 +818,7 @@ templates_select() {
     local selected=()
 
     echo ""
-    echo "請選擇要同步的模版（Enter 選擇，空白行結束）："
+    echo "可用模版："
     echo ""
 
     for i in "${!templates[@]}"; do
@@ -708,30 +827,65 @@ templates_select() {
     done
 
     echo ""
-    while true; do
-        read -p "選擇 (1-${#templates[@]}, Enter 結束): " -r
-        [[ -z "$REPLY" ]] && break
+    echo "選擇方式："
+    echo "  • 輸入數字（空格分隔）: 1 3 5"
+    echo "  • 輸入範圍: 1-3"
+    echo "  • 全選: a 或 all"
+    echo "  • 取消: q 或 quit"
+    echo ""
 
-        if [[ "$REPLY" =~ ^[0-9]+$ ]] && [[ "$REPLY" -ge 1 ]] && [[ "$REPLY" -le "${#templates[@]}" ]]; then
-            local idx=$((REPLY - 1))
-            selected+=("${templates[$idx]}")
-            log_success "已添加: ${templates[$idx]}"
-        else
-            log_warning "無效選擇: $REPLY"
-        fi
-    done
+    read -p "請選擇 > " -r
+
+    if [[ "$REPLY" == "q" ]] || [[ "$REPLY" == "quit" ]]; then
+        log_info "已取消"
+        return 1
+    fi
+
+    if [[ "$REPLY" == "a" ]] || [[ "$REPLY" == "all" ]]; then
+        selected=("${templates[@]}")
+    else
+        # 解析選擇
+        for choice in $REPLY; do
+            if [[ "$choice" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                # 範圍選擇
+                local start=${BASH_REMATCH[1]}
+                local end=${BASH_REMATCH[2]}
+                for ((i=start; i<=end; i++)); do
+                    if [[ $i -ge 1 ]] && [[ $i -le ${#templates[@]} ]]; then
+                        selected+=("${templates[$((i-1))]}")
+                    fi
+                done
+            elif [[ "$choice" =~ ^[0-9]+$ ]]; then
+                # 單一選擇
+                if [[ $choice -ge 1 ]] && [[ $choice -le ${#templates[@]} ]]; then
+                    selected+=("${templates[$((choice-1))]}")
+                fi
+            fi
+        done
+    fi
 
     if [[ ${#selected[@]} -eq 0 ]]; then
         log_warning "未選擇任何模版"
-        return
+        return 1
     fi
+
+    # 去重
+    selected=($(printf '%s\n' "${selected[@]}" | sort -u))
+
+    echo ""
+    log_success "已選擇 ${#selected[@]} 個模版："
+    for tpl in "${selected[@]}"; do
+        echo "  • $tpl"
+    done
 
     # 更新配置
     local selected_json=$(printf '%s\n' "${selected[@]}" | jq -R . | jq -s .)
-    config=$(echo "$config" | jq --argjson sel "$selected_json" '.templates.selected = $sel | .templates.enabled = true')
+    config=$(echo "$config" | jq --arg agent "$agent" --argjson sel "$selected_json" \
+        ".agents[\$agent].templates.selected = \$sel | .agents[\$agent].templates.enabled = true")
     save_config "$config"
 
-    log_success "已選擇 ${#selected[@]} 個模版"
+    echo ""
+    log_success "配置已更新"
 }
 
 # ==============================================================================
@@ -1520,12 +1674,6 @@ wizard() {
     "backup_retention": 5
   },
   "agents": {},
-  "templates": {
-    "enabled": false,
-    "sync_dir": ".claude/templates",
-    "selected": [],
-    "last_sync": null
-  },
   "metadata": {
     "project_name": "$(basename "$PROJECT_ROOT")",
     "initialized": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -1553,6 +1701,11 @@ EOF
                     "custom": [],
                     "synced": [],
                     "customized": []
+                },
+                "templates": {
+                    "enabled": false,
+                    "selected": [],
+                    "last_sync": null
                 }
             }
         ')
@@ -1684,6 +1837,11 @@ EOF
                     "custom": [],
                     "synced": [],
                     "customized": []
+                },
+                "templates": {
+                    "enabled": false,
+                    "selected": [],
+                    "last_sync": null
                 }
             }
         ')
@@ -1819,15 +1977,34 @@ show_status() {
     done <<< "$agents"
 
     echo ""
-    log_section "模版同步"
+    log_section "模版同步狀態"
 
-    local tpl_enabled=$(echo "$config" | jq -r '.templates.enabled')
-    local tpl_count=$(echo "$config" | jq -r '.templates.selected | length')
-    local tpl_sync=$(echo "$config" | jq -r '.templates.last_sync // "從未同步"')
+    local has_templates=false
+    while IFS= read -r agent; do
+        [[ -z "$agent" ]] && continue
 
-    echo "  狀態: $([ "$tpl_enabled" == "true" ] && echo "已啟用" || echo "未啟用")"
-    echo "  已選擇: $tpl_count 個模版"
-    echo "  最後同步: $tpl_sync"
+        # 防禦性檢查：確保代理存在
+        if [[ ! -v AGENT_NAMES[$agent] ]]; then
+            continue
+        fi
+
+        local tpl_enabled=$(echo "$config" | jq -r ".agents.${agent}.templates.enabled")
+        local tpl_count=$(echo "$config" | jq -r ".agents.${agent}.templates.selected | length")
+        local tpl_sync=$(echo "$config" | jq -r ".agents.${agent}.templates.last_sync // \"從未同步\"")
+
+        if [[ "$tpl_enabled" == "true" ]] || [[ "$tpl_count" != "0" ]]; then
+            has_templates=true
+            echo "  ${AGENT_NAMES[$agent]}:"
+            echo "    • 狀態: $([ "$tpl_enabled" == "true" ] && echo "已啟用" || echo "未啟用")"
+            echo "    • 已選擇: $tpl_count 個模版"
+            echo "    • 最後同步: $tpl_sync"
+        fi
+    done <<< "$agents"
+
+    if [[ "$has_templates" == false ]]; then
+        echo "  未配置任何代理的模版"
+        echo "  執行 'templates select --agent <name>' 開始"
+    fi
 }
 
 main() {
@@ -1974,10 +2151,68 @@ main() {
                     templates_list
                     ;;
                 select)
-                    templates_select
+                    if [[ -n "$agent" ]]; then
+                        templates_select "$agent"
+                    elif [[ "$all_agents" == true ]]; then
+                        # 為所有偵測到的代理選擇模版
+                        local detected_agents=($(detect_agents_quiet))
+
+                        if [[ ${#detected_agents[@]} -eq 0 ]]; then
+                            log_warning "未偵測到任何 AI 代理目錄"
+                            return 1
+                        fi
+
+                        for ag in "${detected_agents[@]}"; do
+                            templates_select "$ag"
+                            echo ""
+                        done
+                    else
+                        # 為所有啟用的代理選擇模版
+                        local config=$(load_config)
+                        local agents=$(echo "$config" | jq -r '.agents | to_entries[] | select(.value.enabled == true) | .key')
+
+                        if [[ -z "$agents" ]]; then
+                            log_error "未找到啟用的代理，請先執行 init"
+                            return 1
+                        fi
+
+                        while IFS= read -r ag; do
+                            [[ -z "$ag" ]] && continue
+                            templates_select "$ag"
+                            echo ""
+                        done <<< "$agents"
+                    fi
                     ;;
                 sync)
-                    templates_sync
+                    if [[ -n "$agent" ]]; then
+                        update_templates "$agent"
+                    elif [[ "$all_agents" == true ]]; then
+                        # 同步所有偵測到的代理的模版
+                        local detected_agents=($(detect_agents_quiet))
+
+                        if [[ ${#detected_agents[@]} -eq 0 ]]; then
+                            log_warning "未偵測到任何 AI 代理目錄"
+                            return 1
+                        fi
+
+                        log_info "發現 ${#detected_agents[@]} 個代理"
+                        echo ""
+
+                        for ag in "${detected_agents[@]}"; do
+                            update_templates "$ag"
+                            echo ""
+                        done
+                    else
+                        # 同步所有啟用的代理的模版
+                        local config=$(load_config)
+                        local agents=$(echo "$config" | jq -r '.agents | to_entries[] | select(.value.enabled == true) | .key')
+
+                        while IFS= read -r ag; do
+                            [[ -z "$ag" ]] && continue
+                            update_templates "$ag"
+                            echo ""
+                        done <<< "$agents"
+                    fi
                     ;;
                 *)
                     log_error "未知的模版命令: $subcommand"
