@@ -32,6 +32,9 @@ set -euo pipefail
 VERSION="2.1.0"
 VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
 DRY_RUN=false
+JSON_OUTPUT=false
+JSON_REPORT_PATH=""
+LAST_BACKUP_DIR=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
 CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
@@ -89,6 +92,38 @@ declare -A AGENT_ALT_DIRS=(
     ["droid"]=".factory/prompts"
 )
 
+# 代理對應的 CLI 可執行檔名稱
+declare -A AGENT_CLI=(
+    ["claude"]="claude"
+    ["gemini"]="gemini"
+    ["cursor"]="cursor"
+    ["qwen"]="qwen"
+    ["opencode"]="opencode"
+    ["codex"]="codex"
+    ["auggie"]="auggie"
+    ["codebuddy"]="codebuddy"
+    ["q"]="q"
+    ["droid"]="droid"
+)
+
+# 代理是否需要 CLI 工具
+declare -A AGENT_REQUIRES_CLI=(
+    ["claude"]="true"
+    ["copilot"]="false"
+    ["gemini"]="true"
+    ["cursor"]="true"
+    ["qwen"]="true"
+    ["opencode"]="true"
+    ["codex"]="true"
+    ["windsurf"]="false"
+    ["kilocode"]="false"
+    ["auggie"]="true"
+    ["codebuddy"]="true"
+    ["roo"]="false"
+    ["q"]="true"
+    ["droid"]="true"
+)
+
 get_agent_dir_candidates() {
     local agent="$1"
     local candidates=("${AGENTS[$agent]}")
@@ -126,6 +161,45 @@ resolve_agent_dir() {
     else
         echo "${AGENTS[$agent]}"
     fi
+}
+
+get_agent_display_name() {
+    local agent="$1"
+    echo "${AGENT_NAMES[$agent]:-$agent}"
+}
+
+agent_requires_cli() {
+    local agent="$1"
+    [[ "${AGENT_REQUIRES_CLI[$agent]:-true}" == "true" ]]
+}
+
+get_agent_cli_tool() {
+    local agent="$1"
+    echo "${AGENT_CLI[$agent]:-$agent}"
+}
+
+agent_cli_available() {
+    local agent="$1"
+    if ! agent_requires_cli "$agent"; then
+        return 0
+    fi
+
+    local cli
+    cli="$(get_agent_cli_tool "$agent")"
+    [[ -z "$cli" ]] && return 1
+    command -v "$cli" &>/dev/null
+}
+
+detect_installed_agents() {
+    local installed=()
+
+    for agent in "${!AGENTS[@]}"; do
+        if agent_cli_available "$agent"; then
+            installed+=("$agent")
+        fi
+    done
+
+    echo "${installed[@]}"
 }
 
 # 顏色定義
@@ -1389,6 +1463,8 @@ update_commands() {
 
     log_header "同步 ${AGENT_NAMES[$agent]} 命令"
 
+    LAST_BACKUP_DIR=""
+
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
     local commands_dir="$(resolve_agent_dir "$agent")"
@@ -1442,6 +1518,225 @@ update_commands() {
     echo "  ↻  更新: $updated 個"
     echo "  ✓  跳過: $skipped 個"
     echo "  📦 備份: $backup_dir"
+
+    LAST_BACKUP_DIR="$backup_dir"
+}
+
+# ==============================================================================
+# 一鍵更新流程
+# ==============================================================================
+
+update_all() {
+    log_header "一鍵同步"
+
+    local output_json="$JSON_OUTPUT"
+    local has_failure=0
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_info "[DRY-RUN] 略過 spec-kit 更新"
+    else
+        with_timing "spec-kit 更新檢查" update_speckit_repo
+    fi
+
+    local config
+    config="$(load_config)"
+
+    declare -A candidate_agents=()
+    declare -a processing_order=()
+    # 從配置中取得啟用的代理
+    while IFS= read -r agent; do
+        [[ -z "$agent" ]] && continue
+        if [[ -z "${candidate_agents[$agent]+x}" ]]; then
+            candidate_agents[$agent]=1
+            processing_order+=("$agent")
+        fi
+    done < <(printf '%s' "$config" | jq -r '(.agents // {}) | to_entries[] | select(.value.enabled == true) | .key')
+
+    # 從目錄掃描取得代理
+    local detected_dirs
+    if detected_dirs=$(detect_agents_quiet 2>/dev/null); then
+        for agent in $detected_dirs; do
+            if [[ -z "${candidate_agents[$agent]+x}" ]]; then
+                candidate_agents[$agent]=1
+                processing_order+=("$agent")
+            fi
+        done
+    fi
+
+    if [[ ${#processing_order[@]} -eq 0 ]]; then
+        log_warning "未找到可處理的代理，請先執行 init 或創建代理目錄"
+        return 0
+    fi
+
+    # 建立 CLI 安裝集合
+    declare -A installed_cli_set=()
+    local installed_cli
+    installed_cli="$(detect_installed_agents)"
+    for agent in $installed_cli; do
+        installed_cli_set[$agent]=1
+    done
+
+    declare -a summary_success=()
+    declare -a summary_skipped=()
+    declare -a summary_preview=()
+    declare -a summary_missing_cli=()
+    declare -a summary_failed=()
+    declare -a json_records=()
+
+    for agent in "${processing_order[@]}"; do
+        local display
+        display="$(get_agent_display_name "$agent")"
+        local requires_cli=false
+        local has_cli=true
+        local cli_name
+        cli_name="$(get_agent_cli_tool "$agent")"
+
+        if agent_requires_cli "$agent"; then
+            requires_cli=true
+            if [[ -z "${installed_cli_set[$agent]+x}" ]]; then
+                has_cli=false
+            fi
+        fi
+
+        local configured=false
+        if printf '%s' "$config" | jq -e --arg agent "$agent" '(.agents // {}) | has($agent)' >/dev/null 2>&1; then
+            configured=true
+        fi
+
+        local resolved_dir
+        resolved_dir="$(resolve_agent_dir "$agent")"
+
+        if [[ "$requires_cli" == true ]] && [[ "$has_cli" == false ]]; then
+            local message="${display} 已偵測到，但系統未找到 CLI (${cli_name})."
+            summary_missing_cli+=("$display|$message")
+            if [[ "$output_json" == true ]]; then
+                json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "skipped" --arg reason "missing_cli" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
+            fi
+            log_warning "$message"
+            continue
+        fi
+
+        if [[ "$configured" != true ]]; then
+            local message="${display} 尚未在配置中啟用。"
+            summary_skipped+=("$display|$message")
+            if [[ "$output_json" == true ]]; then
+                json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "skipped" --arg reason "not_configured" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
+            fi
+            log_info "$message"
+            continue
+        fi
+
+        if [[ "$DRY_RUN" == true ]]; then
+            local message="[DRY-RUN] ${display} 將執行命令與範本同步"
+            summary_preview+=("$display|$message")
+            if [[ "$output_json" == true ]]; then
+                json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "preview" --arg reason "dry_run" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
+            fi
+            log_info "$message"
+            continue
+        fi
+
+        log_section "處理 $display"
+
+        local templates_enabled
+        templates_enabled="$(printf '%s' "$config" | jq -r --arg agent "$agent" '(.agents // {})[$agent].templates.enabled // false' 2>/dev/null)"
+        [[ "$templates_enabled" == "null" ]] && templates_enabled="false"
+
+        local template_status="disabled"
+        local backup_path=""
+
+        if update_commands "$agent"; then
+            backup_path="$LAST_BACKUP_DIR"
+            local message="${display} 命令同步完成"
+
+            if [[ "$templates_enabled" == "true" ]]; then
+                template_status="skipped"
+                if update_templates "$agent"; then
+                    template_status="synced"
+                else
+                    template_status="failed"
+                    has_failure=1
+                    local fail_msg="${display} 模版同步失敗"
+                    summary_failed+=("$display|$fail_msg")
+                    if [[ "$output_json" == true ]]; then
+                        json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "failed" --arg reason "template_sync_failed" --arg backup "$backup_path" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason,backup:(if $backup == "" then null else $backup end)}')")
+                    fi
+                    config="$(load_config)"
+                    continue
+                fi
+            fi
+
+            summary_success+=("$display|$message")
+            if [[ "$output_json" == true ]]; then
+                json_records+=(
+                    "$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "success" --arg reason "synced" --arg backup "$backup_path" --arg template "$template_status" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason,backup:(if $backup == "" then null else $backup end),templates:(if $template == "disabled" then null else $template end)}')"
+                )
+            fi
+
+            log_success "$message"
+        else
+            local message="${display} 命令同步失敗"
+            summary_failed+=("$display|$message")
+            has_failure=1
+            if [[ "$output_json" == true ]]; then
+                json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "failed" --arg reason "command_sync_failed" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
+            fi
+            log_error "$message"
+        fi
+
+        config="$(load_config)"
+    done
+
+    echo ""
+    log_header "一鍵更新摘要"
+
+    if [[ ${#summary_success[@]} -eq 0 && ${#summary_preview[@]} -eq 0 && ${#summary_skipped[@]} -eq 0 && ${#summary_missing_cli[@]} -eq 0 && ${#summary_failed[@]} -eq 0 ]]; then
+        log_info "沒有可顯示的結果"
+    fi
+
+    local entry
+    for entry in "${summary_success[@]}"; do
+        local name="${entry%%|*}"
+        local msg="${entry#*|}"
+        log_success "$msg"
+    done
+
+    for entry in "${summary_preview[@]}"; do
+        local msg="${entry#*|}"
+        log_info "$msg"
+    done
+
+    for entry in "${summary_skipped[@]}"; do
+        local msg="${entry#*|}"
+        log_info "$msg"
+    done
+
+    for entry in "${summary_missing_cli[@]}"; do
+        local msg="${entry#*|}"
+        log_warning "$msg"
+    done
+
+    for entry in "${summary_failed[@]}"; do
+        local msg="${entry#*|}"
+        log_error "$msg"
+    done
+
+    if [[ "$output_json" == true ]]; then
+        local report_dir="$PROJECT_ROOT/out"
+        mkdir -p "$report_dir"
+        JSON_REPORT_PATH="$report_dir/update-report.json"
+        if [[ ${#json_records[@]} -gt 0 ]]; then
+            local json_payload
+            json_payload="[$(IFS=,; echo "${json_records[*]}")]"
+            printf '%s' "$json_payload" | jq '.' > "$JSON_REPORT_PATH"
+        else
+            printf '[]' | jq '.' > "$JSON_REPORT_PATH"
+        fi
+        echo ""
+        log_info "JSON 報告已輸出到: $JSON_REPORT_PATH"
+    fi
+
+    return "$has_failure"
 }
 
 # ==============================================================================
@@ -1931,6 +2226,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
     rollback [options]           還原到先前的備份
+    update-all [options]         一鍵檢查並同步所有代理
 
     templates list               列出可用模版
     templates select             選擇要同步的模版
@@ -1946,6 +2242,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     --quiet, -q                  安靜模式（僅顯示錯誤）
     --verbose, -v                詳細模式（顯示額外資訊）
     --debug                      除錯模式（顯示所有訊息和計時）
+    --json                       在 update-all 時輸出 JSON 報告
     --help                       顯示此幫助訊息
 
 環境變數:
@@ -2092,6 +2389,10 @@ main() {
                 VERBOSITY="debug"
                 shift
                 ;;
+            --json)
+                JSON_OUTPUT=true
+                shift
+                ;;
             --help|-h)
                 show_usage
                 exit 0
@@ -2195,6 +2496,9 @@ main() {
                 log_error "請指定代理: --agent <name>"
                 exit 1
             fi
+            ;;
+        update-all)
+            update_all
             ;;
         templates)
             case "$subcommand" in

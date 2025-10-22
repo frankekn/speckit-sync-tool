@@ -176,7 +176,7 @@ process_project() {
                 log_info "Skipped initialization"
                 return 1  # 跳過：用戶選擇不初始化
             fi
-        elif [ "$mode" = "auto" ]; then
+        elif [ "$mode" = "auto" ] || [ "$mode" = "one-click" ]; then
             log_info "Auto-initializing..."
             if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL init; then
                 log_error "Auto-initialization failed"
@@ -185,6 +185,16 @@ process_project() {
         else
             return 1  # 跳過：check-only 模式且未初始化
         fi
+    fi
+
+    if [ "$mode" = "one-click" ]; then
+        echo ""
+        log_info "One-click update in progress..."
+        if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL update-all --json; then
+            log_error "One-click update failed for $project_name"
+            return 2
+        fi
+        return 0
     fi
 
     # Run check
@@ -443,6 +453,7 @@ Usage:
 Options:
     --auto              Auto mode (no prompts, auto-update)
     --check-only        Check only, no updates
+    --one-click         Run update-all for each project (one command)
     --quiet, -q         Quiet mode (errors only)
     --verbose, -v       Verbose mode (detailed output)
     --debug             Debug mode (all messages with timing)
@@ -490,6 +501,10 @@ main() {
                 ;;
             --check-only)
                 mode="check-only"
+                shift
+                ;;
+            --one-click)
+                mode="one-click"
                 shift
                 ;;
             --quiet|-q)
