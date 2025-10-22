@@ -41,21 +41,22 @@ SPECKIT_PATH="${SPECKIT_PATH:-$(dirname "$SCRIPT_DIR")/spec-kit}"
 SPECKIT_COMMANDS="$SPECKIT_PATH/templates/commands"
 SPECKIT_TEMPLATES="$SPECKIT_PATH/templates"
 
-# AI 代理配置映射表（13 種代理）
+# AI 代理配置映射表（14 種代理）
 declare -A AGENTS=(
     ["claude"]=".claude/commands"
     ["copilot"]=".github/prompts"
     ["gemini"]=".gemini/commands"
-    ["cursor"]=".cursor/commands"
+    ["cursor"]=".cursor/rules"
     ["qwen"]=".qwen/commands"
-    ["opencode"]=".opencode/commands"
-    ["codex"]=".codex/commands"
+    ["opencode"]=".opencode/command"
+    ["codex"]=".codex/prompts"
     ["windsurf"]=".windsurf/workflows"
-    ["kilocode"]=".kilocode/commands"
-    ["auggie"]=".augment/commands"
+    ["kilocode"]=".kilocode/rules"
+    ["auggie"]=".augment/rules"
     ["codebuddy"]=".codebuddy/commands"
-    ["roo"]=".roo/commands"
-    ["q"]=".amazonq/commands"
+    ["roo"]=".roo/rules"
+    ["q"]=".amazonq/prompts"
+    ["droid"]=".factory/commands"
 )
 
 # 代理顯示名稱
@@ -73,7 +74,59 @@ declare -A AGENT_NAMES=(
     ["codebuddy"]="CodeBuddy CLI"
     ["roo"]="Roo Code"
     ["q"]="Amazon Q Developer CLI"
+    ["droid"]="Droid CLI"
 )
+
+# 代理目錄的替代選項（以管道符分隔）
+declare -A AGENT_ALT_DIRS=(
+    ["cursor"]=".cursor/commands"
+    ["opencode"]=".opencode/commands"
+    ["codex"]=".codex/commands"
+    ["kilocode"]=".kilocode"
+    ["auggie"]=".augment/commands"
+    ["roo"]=".roo/rules-mode-writer|.roo/commands"
+    ["q"]=".amazonq/commands"
+    ["droid"]=".factory/prompts"
+)
+
+get_agent_dir_candidates() {
+    local agent="$1"
+    local candidates=("${AGENTS[$agent]}")
+
+    if [[ -v AGENT_ALT_DIRS[$agent] ]]; then
+        local alt="${AGENT_ALT_DIRS[$agent]}"
+        IFS='|' read -r -a alt_array <<< "$alt"
+        candidates+=("${alt_array[@]}")
+    fi
+
+    printf '%s\n' "${candidates[@]}"
+}
+
+find_existing_agent_dir() {
+    local agent="$1"
+    local candidate
+
+    while IFS= read -r candidate; do
+        [[ -z "$candidate" ]] && continue
+        if [[ -d "$PROJECT_ROOT/$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done < <(get_agent_dir_candidates "$agent")
+
+    return 1
+}
+
+resolve_agent_dir() {
+    local agent="$1"
+    local existing
+
+    if existing=$(find_existing_agent_dir "$agent"); then
+        echo "$existing"
+    else
+        echo "${AGENTS[$agent]}"
+    fi
+}
 
 # 顏色定義
 RED='\033[0;31m'
@@ -428,7 +481,7 @@ scan_new_commands() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
 
     log_section "掃描新命令 ($agent)"
 
@@ -480,8 +533,7 @@ detect_agents_quiet() {
     local detected=()
 
     for agent in "${!AGENTS[@]}"; do
-        local dir="${AGENTS[$agent]}"
-        if [[ -d "$PROJECT_ROOT/$dir" ]]; then
+        if dir=$(find_existing_agent_dir "$agent"); then
             detected+=("$agent")
         fi
     done
@@ -500,8 +552,7 @@ detect_agents() {
     local detected=()
 
     for agent in "${!AGENTS[@]}"; do
-        local dir="${AGENTS[$agent]}"
-        if [[ -d "$PROJECT_ROOT/$dir" ]]; then
+        if dir=$(find_existing_agent_dir "$agent"); then
             detected+=("$agent")
             log_success "${AGENT_NAMES[$agent]} ($dir)"
         fi
@@ -545,7 +596,7 @@ select_agents_interactive() {
             fi
 
             local name="${AGENT_NAMES[$agent]}"
-            local dir="${AGENTS[$agent]}"
+            local dir="$(resolve_agent_dir "$agent")"
 
             read -p "[$((i+1))] $name ($dir) [Y/n] " -r || true
             if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
@@ -730,7 +781,7 @@ update_templates() {
     log_header "同步 ${AGENT_NAMES[$agent]} 模版"
 
     local config=$(load_config)
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
 
     # 從 commands 目錄中提取 agent 根目錄
     # 例如: .claude/commands → .claude
@@ -902,7 +953,7 @@ check_command() {
         return
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
 
     local source="$SPECKIT_COMMANDS/$command"
     local target="$PROJECT_ROOT/$commands_dir/$command"
@@ -934,7 +985,7 @@ sync_command() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
 
     local source="$SPECKIT_COMMANDS/$command"
     local target="$PROJECT_ROOT/$commands_dir/$command"
@@ -1026,7 +1077,7 @@ list_backups() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
     local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
 
     if [[ ! -d "$backup_base" ]]; then
@@ -1070,7 +1121,7 @@ show_backup_diff() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
     local current_dir="$PROJECT_ROOT/$commands_dir"
 
     log_section "備份與當前版本差異"
@@ -1165,7 +1216,7 @@ restore_backup() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
     local current_dir="$PROJECT_ROOT/$commands_dir"
 
     log_header "還原備份"
@@ -1229,7 +1280,7 @@ select_backup_interactive() {
         return 1
     fi
 
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
     local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
 
     if [[ ! -d "$backup_base" ]]; then
@@ -1299,7 +1350,7 @@ rollback_command() {
 
     # 如果指定了時間戳，直接還原
     if [[ -n "$backup_timestamp" ]]; then
-        local commands_dir="${AGENTS[$agent]}"
+        local commands_dir="$(resolve_agent_dir "$agent")"
         local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$backup_timestamp"
 
         if [[ ! -d "$backup_dir" ]]; then
@@ -1340,7 +1391,7 @@ update_commands() {
 
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
-    local commands_dir="${AGENTS[$agent]}"
+    local commands_dir="$(resolve_agent_dir "$agent")"
 
     # 建立備份
     local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$(date +%Y%m%d_%H%M%S)"
@@ -1484,7 +1535,7 @@ wizard() {
     else
         log_success "偵測到 ${#detected_agents[@]} 個代理："
         for agent in "${detected_agents[@]}"; do
-            echo "  ${GREEN}${ICON_SUCCESS}${NC} ${AGENT_NAMES[$agent]} (${AGENTS[$agent]})"
+            echo "  ${GREEN}${ICON_SUCCESS}${NC} ${AGENT_NAMES[$agent]} ($(resolve_agent_dir "$agent"))"
         done
     fi
 
@@ -1506,7 +1557,7 @@ wizard() {
         for i in "${!detected_agents[@]}"; do
             local agent="${detected_agents[$i]}"
             local name="${AGENT_NAMES[$agent]}"
-            local dir="${AGENTS[$agent]}"
+            local dir="$(resolve_agent_dir "$agent")"
 
             read -p "  [$((i+1))] $name ($dir) - 啟用？[Y/n] " -r
             if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
@@ -1688,7 +1739,7 @@ EOF
     local commands_json=$(printf '%s\n' "${selected_commands[@]}" | jq -R . | jq -s .)
 
     for agent in "${selected_agents[@]}"; do
-        local agent_dir="${AGENTS[$agent]}"
+        local agent_dir="$(resolve_agent_dir "$agent")"
 
         config=$(echo "$config" | jq --arg agent "$agent" \
                                       --arg dir "$agent_dir" \
@@ -1823,7 +1874,7 @@ EOF
             continue
         fi
 
-        local agent_dir="${AGENTS[$agent]}"
+        local agent_dir="$(resolve_agent_dir "$agent")"
         local commands_json=$(printf '%s\n' "${standard_commands[@]}" | jq -R . | jq -s .)
 
         config=$(echo "$config" | jq --arg agent "$agent" \
