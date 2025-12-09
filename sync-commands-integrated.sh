@@ -34,7 +34,6 @@ VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
 DRY_RUN=false
 JSON_OUTPUT=false
 JSON_REPORT_PATH=""
-LAST_BACKUP_DIR=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
 CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
@@ -220,7 +219,6 @@ readonly ICON_INFO="ℹ"
 readonly ICON_NEW="⊕"
 readonly ICON_OUTDATED="↻"
 readonly ICON_PACKAGE="📦"
-readonly ICON_BACKUP="💾"
 readonly ICON_SYNC="🔄"
 readonly ICON_ROCKET="🚀"
 
@@ -1139,316 +1137,6 @@ check_updates() {
 }
 
 # ==============================================================================
-# Rollback 功能
-# ==============================================================================
-
-list_backups() {
-    local agent="$1"
-
-    # 防禦性檢查：確保代理存在
-    if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
-        return 1
-    fi
-
-    local commands_dir="$(resolve_agent_dir "$agent")"
-    local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
-
-    if [[ ! -d "$backup_base" ]]; then
-        log_warning "沒有找到任何備份"
-        return 1
-    fi
-
-    # 獲取所有備份目錄（按時間排序）
-    local backups=($(find "$backup_base" -maxdepth 1 -type d -name "20*" | sort -r))
-
-    if [[ ${#backups[@]} -eq 0 ]]; then
-        log_warning "沒有找到任何備份"
-        return 1
-    fi
-
-    echo ""
-    echo "${BOLD}可用備份：${NC}"
-    echo ""
-
-    local idx=1
-    for backup_dir in "${backups[@]}"; do
-        local timestamp=$(basename "$backup_dir")
-        local formatted_time=$(echo "$timestamp" | sed 's/_/ /')
-        local file_count=$(find "$backup_dir" -type f -name "*.md" | wc -l | tr -d ' ')
-        local size=$(du -sh "$backup_dir" 2>/dev/null | cut -f1)
-
-        printf "[%2d] %s (%s 個檔案, %s)\n" "$idx" "$formatted_time" "$file_count" "$size"
-        idx=$((idx + 1))
-    done
-
-    echo ""
-}
-
-show_backup_diff() {
-    local agent="$1"
-    local backup_dir="$2"
-
-    # 防禦性檢查：確保代理存在
-    if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
-        return 1
-    fi
-
-    local commands_dir="$(resolve_agent_dir "$agent")"
-    local current_dir="$PROJECT_ROOT/$commands_dir"
-
-    log_section "備份與當前版本差異"
-
-    echo ""
-    echo "${BOLD}備份：${NC}$backup_dir"
-    echo "${BOLD}當前：${NC}$current_dir"
-    echo ""
-
-    local has_diff=false
-
-    # 比對所有 .md 檔案
-    for backup_file in "$backup_dir"/*.md; do
-        [[ ! -f "$backup_file" ]] && continue
-
-        local filename=$(basename "$backup_file")
-        local current_file="$current_dir/$filename"
-
-        if [[ ! -f "$current_file" ]]; then
-            echo -e "${RED}✗${NC} $filename - 當前版本中不存在"
-            has_diff=true
-            continue
-        fi
-
-        if ! diff -q "$backup_file" "$current_file" >/dev/null 2>&1; then
-            echo -e "${YELLOW}↻${NC} $filename - 有差異"
-            has_diff=true
-
-            # 顯示簡要差異統計
-            local lines_changed=$(diff "$backup_file" "$current_file" 2>/dev/null | grep -c "^[<>]" || echo "0")
-            echo "   ${GRAY}變更行數: $lines_changed${NC}"
-        else
-            echo -e "${GREEN}✓${NC} $filename - 相同"
-        fi
-    done
-
-    # 檢查當前版本中的新檔案
-    for current_file in "$current_dir"/*.md; do
-        [[ ! -f "$current_file" ]] && continue
-
-        local filename=$(basename "$current_file")
-        local backup_file="$backup_dir/$filename"
-
-        if [[ ! -f "$backup_file" ]]; then
-            echo -e "${CYAN}⊕${NC} $filename - 備份中不存在（新增的檔案）"
-            has_diff=true
-        fi
-    done
-
-    echo ""
-
-    if [[ "$has_diff" == false ]]; then
-        log_info "備份與當前版本完全相同"
-        return 0
-    fi
-
-    return 0
-}
-
-validate_backup() {
-    local backup_dir="$1"
-
-    if [[ ! -d "$backup_dir" ]]; then
-        log_error "備份目錄不存在: $backup_dir"
-        return 1
-    fi
-
-    # 檢查備份中是否有 .md 檔案
-    local file_count=$(find "$backup_dir" -type f -name "*.md" | wc -l | tr -d ' ')
-
-    if [[ "$file_count" -eq 0 ]]; then
-        log_error "備份目錄中沒有 .md 檔案"
-        return 1
-    fi
-
-    log_debug "備份驗證通過: $file_count 個檔案"
-    return 0
-}
-
-restore_backup() {
-    local agent="$1"
-    local backup_dir="$2"
-
-    # 防禦性檢查：確保代理存在
-    if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
-        return 1
-    fi
-
-    # 驗證備份
-    if ! validate_backup "$backup_dir"; then
-        return 1
-    fi
-
-    local commands_dir="$(resolve_agent_dir "$agent")"
-    local current_dir="$PROJECT_ROOT/$commands_dir"
-
-    log_header "還原備份"
-
-    echo ""
-    echo "${BOLD}來源：${NC}$backup_dir"
-    echo "${BOLD}目標：${NC}$current_dir"
-    echo ""
-
-    # 建立還原前的備份（以防萬一）
-    local safety_backup="$PROJECT_ROOT/$commands_dir/.backup/before_rollback_$(date +%Y%m%d_%H%M%S)"
-    mkdir -p "$safety_backup"
-
-    if [[ -d "$current_dir" ]]; then
-        cp -r "$current_dir"/*.md "$safety_backup/" 2>/dev/null || true
-        log_info "${ICON_BACKUP} 安全備份: $safety_backup"
-    fi
-
-    echo ""
-
-    # 執行還原
-    local restored=0
-    local failed=0
-
-    for backup_file in "$backup_dir"/*.md; do
-        [[ ! -f "$backup_file" ]] && continue
-
-        local filename=$(basename "$backup_file")
-        local target_file="$current_dir/$filename"
-
-        if cp "$backup_file" "$target_file" 2>/dev/null; then
-            log_success "$filename - 已還原"
-            restored=$((restored + 1))
-        else
-            log_error "$filename - 還原失敗"
-            failed=$((failed + 1))
-        fi
-    done
-
-    echo ""
-    log_header "還原完成"
-    echo "  ${ICON_SUCCESS} 成功: $restored 個"
-    echo "  ${ICON_ERROR} 失敗: $failed 個"
-    echo "  ${ICON_BACKUP} 安全備份: $safety_backup"
-
-    if [[ $failed -eq 0 ]]; then
-        log_success "所有檔案已成功還原"
-        return 0
-    else
-        log_warning "部分檔案還原失敗，請檢查錯誤訊息"
-        return 1
-    fi
-}
-
-select_backup_interactive() {
-    local agent="$1"
-
-    # 防禦性檢查：確保代理存在
-    if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
-        return 1
-    fi
-
-    local commands_dir="$(resolve_agent_dir "$agent")"
-    local backup_base="$PROJECT_ROOT/$commands_dir/.backup"
-
-    if [[ ! -d "$backup_base" ]]; then
-        log_error "沒有找到任何備份"
-        return 1
-    fi
-
-    # 獲取所有備份目錄（按時間排序，最新的在前）
-    local backups=($(find "$backup_base" -maxdepth 1 -type d -name "20*" | sort -r))
-
-    if [[ ${#backups[@]} -eq 0 ]]; then
-        log_error "沒有找到任何備份"
-        return 1
-    fi
-
-    # 顯示備份列表
-    list_backups "$agent"
-
-    # 互動式選擇
-    local selected_backup=""
-
-    while true; do
-        read -p "請選擇要還原的備份 (1-${#backups[@]}, q 退出): " -r
-
-        if [[ "$REPLY" == "q" ]] || [[ "$REPLY" == "Q" ]]; then
-            log_info "已取消"
-            return 1
-        fi
-
-        if [[ "$REPLY" =~ ^[0-9]+$ ]] && [[ "$REPLY" -ge 1 ]] && [[ "$REPLY" -le "${#backups[@]}" ]]; then
-            local idx=$((REPLY - 1))
-            selected_backup="${backups[$idx]}"
-            break
-        else
-            log_warning "無效選擇，請輸入 1-${#backups[@]} 或 q 退出"
-        fi
-    done
-
-    # 顯示差異
-    echo ""
-    show_backup_diff "$agent" "$selected_backup"
-
-    # 確認還原
-    echo ""
-    read -p "${YELLOW}確定要還原這個備份嗎？此操作會覆蓋當前檔案 [y/N]${NC} " -r
-
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "已取消還原"
-        return 1
-    fi
-
-    # 執行還原
-    restore_backup "$agent" "$selected_backup"
-}
-
-rollback_command() {
-    local agent="$1"
-    local backup_timestamp="$2"
-
-    # 防禦性檢查：確保代理存在
-    if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
-        return 1
-    fi
-
-    log_header "Rollback - ${AGENT_NAMES[$agent]}"
-
-    # 如果指定了時間戳，直接還原
-    if [[ -n "$backup_timestamp" ]]; then
-        local commands_dir="$(resolve_agent_dir "$agent")"
-        local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$backup_timestamp"
-
-        if [[ ! -d "$backup_dir" ]]; then
-            log_error "找不到指定的備份: $backup_timestamp"
-            return 1
-        fi
-
-        show_backup_diff "$agent" "$backup_dir"
-
-        echo ""
-        read -p "${YELLOW}確定要還原這個備份嗎？[y/N]${NC} " -r
-
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            restore_backup "$agent" "$backup_dir"
-        else
-            log_info "已取消還原"
-        fi
-    else
-        # 互動式選擇備份
-        select_backup_interactive "$agent"
-    fi
-}
-
-# ==============================================================================
 # 命令同步
 # ==============================================================================
 
@@ -1463,20 +1151,9 @@ update_commands() {
 
     log_header "同步 ${AGENT_NAMES[$agent]} 命令"
 
-    LAST_BACKUP_DIR=""
-
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
     local commands_dir="$(resolve_agent_dir "$agent")"
-
-    # 建立備份
-    local backup_dir="$PROJECT_ROOT/$commands_dir/.backup/$(date +%Y%m%d_%H%M%S)"
-    dry_run_execute "建立備份目錄: $backup_dir" mkdir -p "$backup_dir"
-
-    if [[ -d "$PROJECT_ROOT/$commands_dir" ]]; then
-        dry_run_execute "備份現有命令檔案" cp -r "$PROJECT_ROOT/$commands_dir"/*.md "$backup_dir/" 2>/dev/null || true
-        log_info "📦 建立備份: $backup_dir"
-    fi
 
     echo ""
 
@@ -1517,9 +1194,6 @@ update_commands() {
     echo "  ⊕  新增: $added 個"
     echo "  ↻  更新: $updated 個"
     echo "  ✓  跳過: $skipped 個"
-    echo "  📦 備份: $backup_dir"
-
-    LAST_BACKUP_DIR="$backup_dir"
 }
 
 # ==============================================================================
@@ -1643,10 +1317,8 @@ update_all() {
         [[ "$templates_enabled" == "null" ]] && templates_enabled="false"
 
         local template_status="disabled"
-        local backup_path=""
 
         if update_commands "$agent"; then
-            backup_path="$LAST_BACKUP_DIR"
             local message="${display} 命令同步完成"
 
             if [[ "$templates_enabled" == "true" ]]; then
@@ -1659,7 +1331,7 @@ update_all() {
                     local fail_msg="${display} 模版同步失敗"
                     summary_failed+=("$display|$fail_msg")
                     if [[ "$output_json" == true ]]; then
-                        json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "failed" --arg reason "template_sync_failed" --arg backup "$backup_path" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason,backup:(if $backup == "" then null else $backup end)}')")
+                        json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "failed" --arg reason "template_sync_failed" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
                     fi
                     config="$(load_config)"
                     continue
@@ -1669,7 +1341,7 @@ update_all() {
             summary_success+=("$display|$message")
             if [[ "$output_json" == true ]]; then
                 json_records+=(
-                    "$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "success" --arg reason "synced" --arg backup "$backup_path" --arg template "$template_status" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason,backup:(if $backup == "" then null else $backup end),templates:(if $template == "disabled" then null else $template end)}')"
+                    "$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "success" --arg reason "synced" --arg template "$template_status" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason,templates:(if $template == "disabled" then null else $template end)}')"
                 )
             fi
 
@@ -2015,9 +1687,7 @@ wizard() {
   },
   "strategy": {
     "mode": "$strategy_mode",
-    "on_conflict": "$on_conflict",
-    "auto_backup": true,
-    "backup_retention": 5
+    "on_conflict": "$on_conflict"
   },
   "agents": {},
   "metadata": {
@@ -2140,9 +1810,7 @@ init_config() {
   },
   "strategy": {
     "mode": "semi-auto",
-    "on_conflict": "ask",
-    "auto_backup": true,
-    "backup_retention": 5
+    "on_conflict": "ask"
   },
   "agents": {},
   "templates": {
@@ -2225,7 +1893,6 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     check [options]              檢查更新狀態
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
-    rollback [options]           還原到先前的備份
     update-all [options]         一鍵檢查並同步所有代理
 
     templates list               列出可用模版
@@ -2273,12 +1940,6 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
     # 掃描新命令
     $0 scan
-
-    # 還原備份（互動式選擇）
-    $0 rollback --agent claude
-
-    # 還原到指定時間的備份
-    $0 rollback --agent claude 20241016_143022
 
     # 選擇並同步模版
     $0 templates select
@@ -2490,12 +2151,8 @@ main() {
             fi
             ;;
         rollback)
-            if [[ -n "$agent" ]]; then
-                rollback_command "$agent" "$subcommand"
-            else
-                log_error "請指定代理: --agent <name>"
-                exit 1
-            fi
+            log_warning "備份功能已移除。如需還原，請使用 git checkout 還原檔案。"
+            exit 0
             ;;
         update-all)
             update_all

@@ -8,9 +8,7 @@
   },
   "strategy": {
     "mode": "semi-auto",
-    "on_conflict": "ask",
-    "auto_backup": true,
-    "backup_retention": 5
+    "on_conflict": "ask"
   },
   "commands": {
     "standard": [
