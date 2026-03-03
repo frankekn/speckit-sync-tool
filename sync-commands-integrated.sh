@@ -291,12 +291,12 @@ with_timing() {
 
     if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
         local start_time=$(date +%s.%N)
-        log_verbose "開始: $description"
+        log_verbose "Start: $description"
         "$@"
         local exit_code=$?
         local end_time=$(date +%s.%N)
         local duration=$(echo "$end_time - $start_time" | bc)
-        log_verbose "完成: $description (耗時 ${duration}s)"
+        log_verbose "Done: $description (took ${duration}s)"
         return $exit_code
     else
         "$@"
@@ -310,7 +310,7 @@ dry_run_execute() {
 
     if [[ "$DRY_RUN" == true ]]; then
         echo -e "${YELLOW}[DRY-RUN]${NC} $description"
-        echo -e "${GRAY}    指令: $*${NC}"
+        echo -e "${GRAY}    Command: $*${NC}"
         return 0
     else
         "$@"
@@ -321,7 +321,7 @@ dry_run_execute() {
 show_progress() {
     local current="$1"
     local total="$2"
-    local message="${3:-處理中}"
+    local message="${3:-Processing}"
 
     # 檢測是否為終端（避免在日誌文件中產生異常字符）
     if [[ ! -t 1 ]]; then
@@ -339,7 +339,7 @@ show_progress() {
     printf "${GRAY}%*s${NC}" "$empty" | tr ' ' '░'
     printf " %s (%d/%d)" "$message" "$current" "$total"
 
-    [[ $current -eq $total ]] && echo ""  # 完成時換行
+    [[ $current -eq $total ]] && echo ""  # newline on completion
 }
 
 # ==============================================================================
@@ -356,7 +356,7 @@ check_dependencies() {
         required_cmds=("git" "jq" "diff" "grep")
     fi
 
-    log_debug "檢查必要工具: ${required_cmds[*]}"
+    log_debug "Checking required tools: ${required_cmds[*]}"
 
     for cmd in "${required_cmds[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
@@ -365,19 +365,19 @@ check_dependencies() {
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        log_error "缺少必要工具"
+        log_error "Missing required tools"
         echo ""
-        echo "${BOLD}缺少的工具：${NC}"
+        echo "${BOLD}Missing tools:${NC}"
         printf "  ${RED}${ICON_ERROR}${NC} %s\n" "${missing[@]}"
         echo ""
-        echo "${BOLD}${ICON_ROCKET} 安裝方式：${NC}"
+        echo "${BOLD}${ICON_ROCKET} Install:${NC}"
         echo "  macOS:   ${CYAN}brew install ${missing[*]}${NC}"
         echo "  Ubuntu:  ${CYAN}sudo apt install ${missing[*]}${NC}"
         echo "  CentOS:  ${CYAN}sudo yum install ${missing[*]}${NC}"
         return 1
     fi
 
-    log_debug "依賴檢查通過"
+    log_debug "Dependency check passed"
     return 0
 }
 
@@ -443,17 +443,17 @@ compare_versions() {
 
 update_speckit_repo() {
     if [[ ! -d "$SPECKIT_PATH/.git" ]]; then
-        log_warning "spec-kit 不是 git 倉庫，跳過自動更新"
+        log_warning "spec-kit is not a git repository, skipping auto update"
         return 0
     fi
 
-    log_info "檢查 spec-kit 是否有新版本..."
+    log_info "Checking for a newer spec-kit version..."
 
     cd "$SPECKIT_PATH"
 
     # 檢查是否有未提交的變更
     if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        log_warning "spec-kit 有未提交的變更，跳過自動更新"
+        log_warning "spec-kit has uncommitted changes, skipping auto update"
         cd - >/dev/null
         return 0
     fi
@@ -470,8 +470,8 @@ update_speckit_repo() {
     local latest_tag=$(curl -s https://api.github.com/repos/github/spec-kit/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
 
     if [[ -z "$latest_tag" ]]; then
-        log_warning "無法從 GitHub 獲取最新版本，使用本地版本"
-        log_info "本地版本: $current_tag"
+        log_warning "Unable to fetch latest version from GitHub, using local version"
+        log_info "Local version: $current_tag"
         cd - >/dev/null
         return 0
     fi
@@ -480,26 +480,26 @@ update_speckit_repo() {
     local comparison=$(compare_versions "$current_tag" "$latest_tag")
 
     if [[ "$comparison" == "<" ]]; then
-        log_info "發現新版本: $current_tag → $latest_tag"
-        log_info "正在更新到 $latest_tag..."
+        log_info "New version found: $current_tag -> $latest_tag"
+        log_info "Updating to $latest_tag..."
 
         # Fetch tags
         git fetch --tags --quiet 2>/dev/null || {
-            log_error "無法 fetch tags"
+            log_error "Failed to fetch tags"
             cd - >/dev/null
             return 1
         }
 
         # Checkout 到最新 tag
         if git checkout "$latest_tag" --quiet 2>/dev/null; then
-            log_success "spec-kit 已更新: $current_tag → $latest_tag"
+            log_success "spec-kit updated: $current_tag -> $latest_tag"
         else
-            log_error "無法切換到 $latest_tag"
+            log_error "Failed to switch to $latest_tag"
             cd - >/dev/null
             return 1
         fi
     else
-        log_success "spec-kit 已是最新版本 ($current_tag)"
+        log_success "spec-kit is already up to date ($current_tag)"
     fi
 
     cd - >/dev/null
@@ -513,24 +513,24 @@ get_standard_commands_from_speckit() {
     local commands=()
 
     if [[ ! -d "$SPECKIT_COMMANDS" ]]; then
-        log_error "找不到 spec-kit 命令目錄"
+        log_error "spec-kit commands directory not found"
         echo ""
-        echo "${BOLD}${ICON_WARNING} 預期路徑：${NC}$SPECKIT_COMMANDS"
+        echo "${BOLD}${ICON_WARNING} Expected path:${NC} $SPECKIT_COMMANDS"
         echo ""
-        echo "${BOLD}${ICON_WARNING} 可能的原因：${NC}"
-        echo "  1. SPECKIT_PATH 設定錯誤"
-        echo "  2. spec-kit 倉庫不完整"
-        echo "  3. spec-kit 版本過舊"
+        echo "${BOLD}${ICON_WARNING} Possible reasons:${NC}"
+        echo "  1. SPECKIT_PATH is incorrect"
+        echo "  2. spec-kit repository is incomplete"
+        echo "  3. spec-kit version is too old"
         echo ""
-        echo "${BOLD}${ICON_ROCKET} 建議操作：${NC}"
-        echo "  1. 檢查當前設定："
+        echo "${BOLD}${ICON_ROCKET} Suggested actions:${NC}"
+        echo "  1. Check current settings:"
         echo "     ${CYAN}echo \$SPECKIT_PATH${NC}"
-        echo "     ${GRAY}目前值: $SPECKIT_PATH${NC}"
+        echo "     ${GRAY}Current value: $SPECKIT_PATH${NC}"
         echo ""
-        echo "  2. 驗證目錄結構："
+        echo "  2. Verify directory structure:"
         echo "     ${CYAN}ls -la $SPECKIT_PATH${NC}"
         echo ""
-        echo "  3. 重新克隆 spec-kit："
+        echo "  3. Re-clone spec-kit:"
         echo "     ${CYAN}git clone https://github.com/github/github-models-template.git spec-kit${NC}"
         return 1
     fi
@@ -556,15 +556,15 @@ get_command_description() {
 
     # 如果沒有 frontmatter，返回預設描述
     case "$(basename "$file")" in
-        specify.md) echo "撰寫功能規格" ;;
-        plan.md) echo "制定實作計劃" ;;
-        tasks.md) echo "分解任務清單" ;;
-        implement.md) echo "執行程式碼實作" ;;
-        constitution.md) echo "專案憲法與原則" ;;
-        clarify.md) echo "釐清需求" ;;
-        analyze.md) echo "程式碼分析" ;;
-        checklist.md) echo "執行檢查清單" ;;
-        *) echo "未知命令" ;;
+        specify.md) echo "Write feature specification" ;;
+        plan.md) echo "Create implementation plan" ;;
+        tasks.md) echo "Break down task list" ;;
+        implement.md) echo "Implement code changes" ;;
+        constitution.md) echo "Project constitution and principles" ;;
+        clarify.md) echo "Clarify requirements" ;;
+        analyze.md) echo "Code analysis" ;;
+        checklist.md) echo "Run checklist" ;;
+        *) echo "Unknown command" ;;
     esac
 }
 
@@ -573,13 +573,13 @@ scan_new_commands() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
     local commands_dir="$(resolve_agent_dir "$agent")"
 
-    log_section "掃描新命令 ($agent)"
+    log_section "Scan new commands ($agent)"
 
     # 獲取 spec-kit 中的所有命令
     local speckit_commands=($(get_standard_commands_from_speckit))
@@ -596,11 +596,11 @@ scan_new_commands() {
     done
 
     if [[ ${#new_commands[@]} -eq 0 ]]; then
-        log_success "沒有發現新命令"
+        log_success "No new commands found"
         return
     fi
 
-    log_info "發現 ${#new_commands[@]} 個新命令："
+    log_info "Found ${#new_commands[@]} new commands:"
     for cmd in "${new_commands[@]}"; do
         local desc=$(get_command_description "$SPECKIT_COMMANDS/$cmd")
         echo "  ⊕ $cmd - $desc"
@@ -608,15 +608,15 @@ scan_new_commands() {
 
     # 互動式選擇
     echo ""
-    read -p "是否要將這些新命令加入同步列表？[y/N] " -r
+    read -p "Add these new commands to sync list? [y/N] " -r
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         for cmd in "${new_commands[@]}"; do
             config=$(echo "$config" | jq ".agents.${agent}.commands.standard += [\"$cmd\"]")
         done
         save_config "$config"
-        log_success "已添加 ${#new_commands[@]} 個新命令到配置"
+        log_success "Added ${#new_commands[@]} new commands to config"
     else
-        log_info "已跳過新命令添加"
+        log_info "Skipped adding new commands"
     fi
 }
 
@@ -658,7 +658,7 @@ remove_path_safely() {
     if command -v trash >/dev/null 2>&1; then
         trash "$path"
     else
-        log_warning "找不到 trash，改用 rm -rf: $path"
+        log_warning "trash not found, falling back to rm -rf: $path"
         rm -rf "$path"
     fi
 }
@@ -731,8 +731,8 @@ prune_empty_agent_dirs() {
 cleanup_repo() {
     local apply_mode="$1"
 
-    log_header "清理 Spec-Kit 痕跡"
-    log_info "模式: $([ "$apply_mode" == "true" ] && echo "套用 (--apply)" || echo "預覽")"
+    log_header "Clean Spec-Kit artifacts"
+    log_info "Mode: $([ "$apply_mode" == "true" ] && echo "apply (--apply)" || echo "preview")"
 
     local -a standard_commands=()
     local -a cleanup_dirs=()
@@ -747,7 +747,7 @@ cleanup_repo() {
         standard_raw="$(get_standard_commands_from_speckit)"
         read -r -a standard_commands <<< "$standard_raw"
     else
-        log_warning "找不到 $SPECKIT_COMMANDS，將略過模板精準比對"
+        log_warning "Cannot find $SPECKIT_COMMANDS, skipping exact template match"
     fi
 
     mapfile -t cleanup_dirs < <(get_cleanup_agent_dirs)
@@ -827,31 +827,31 @@ cleanup_repo() {
     [[ "$agents_action" != "none" ]] && total_hits=$((total_hits + 1))
 
     if [[ "$total_hits" -eq 0 ]]; then
-        log_info "未發現 Spec-Kit 痕跡"
+        log_info "No Spec-Kit artifacts found"
         [[ -n "$agents_tmp" ]] && rm -f "$agents_tmp"
         return 10
     fi
 
     echo ""
-    log_section "命中項目"
+    log_section "Matched items"
     local i
     for i in "${!delete_targets[@]}"; do
         if [[ "$apply_mode" == "true" ]]; then
-            echo "  - 刪除: ${delete_targets[$i]} (${delete_reasons[$i]})"
+            echo "  - Deleted: ${delete_targets[$i]} (${delete_reasons[$i]})"
         else
-            echo "  - 將刪除: ${delete_targets[$i]} (${delete_reasons[$i]})"
+            echo "  - Will delete: ${delete_targets[$i]} (${delete_reasons[$i]})"
         fi
     done
 
     if [[ "$agents_action" == "rewrite" ]]; then
-        echo "  - $([ "$apply_mode" == "true" ] && echo "改寫" || echo "將改寫"): $agents_file (移除 Spec-Kit 區塊)"
+        echo "  - $([ "$apply_mode" == "true" ] && echo "rewrite" || echo "will rewrite"): $agents_file (remove Spec-Kit injected block)"
     elif [[ "$agents_action" == "delete" ]]; then
-        echo "  - $([ "$apply_mode" == "true" ] && echo "刪除" || echo "將刪除"): $agents_file (清理後為空)"
+        echo "  - $([ "$apply_mode" == "true" ] && echo "delete" || echo "will delete"): $agents_file (empty after cleanup)"
     fi
 
     if [[ "$apply_mode" != "true" ]]; then
         echo ""
-        log_info "預覽完成。若要實際清理，請加上 --apply。"
+        log_info "Preview complete. Add --apply to perform cleanup."
         [[ -n "$agents_tmp" ]] && rm -f "$agents_tmp"
         return 0
     fi
@@ -876,10 +876,10 @@ cleanup_repo() {
     prune_empty_agent_dirs "${cleanup_dirs[@]}"
 
     echo ""
-    log_header "清理完成"
-    echo "  ${ICON_SUCCESS} 已刪除: $deleted_count"
-    echo "  ${ICON_SUCCESS} 已改寫: $modified_count"
-    echo "  ${ICON_PACKAGE} 總命中: $total_hits"
+    log_header "Cleanup complete"
+    echo "  ${ICON_SUCCESS} Deleted: $deleted_count"
+    echo "  ${ICON_SUCCESS} Rewritten: $modified_count"
+    echo "  ${ICON_PACKAGE} Total matches: $total_hits"
 
     return 0
 }
@@ -964,11 +964,11 @@ cleanup_all_projects() {
     local failed=0
     local code=0
 
-    log_header "批次清理 Spec-Kit 痕跡"
-    log_info "掃描目錄: $workspace_dir"
+    log_header "Batch clean Spec-Kit artifacts"
+    log_info "Scan directory: $workspace_dir"
 
     if [[ ! -d "$workspace_dir" ]]; then
-        log_error "目錄不存在: $workspace_dir"
+        log_error "Directory does not exist: $workspace_dir"
         return 1
     fi
 
@@ -983,7 +983,7 @@ cleanup_all_projects() {
     done
 
     if [[ ${#projects[@]} -eq 0 ]]; then
-        log_info "未找到 Spec-Kit 痕跡"
+        log_info "No Spec-Kit artifacts found"
         return 10
     fi
 
@@ -1045,7 +1045,7 @@ detect_agents_quiet() {
 
 # 詳細版本：顯示偵測過程（用於命令行顯示）
 detect_agents() {
-    log_section "偵測 AI 代理"
+    log_section "Detect AI agents"
 
     local detected=()
 
@@ -1057,12 +1057,12 @@ detect_agents() {
     done
 
     if [[ ${#detected[@]} -eq 0 ]]; then
-        log_warning "未偵測到任何 AI 代理目錄"
+        log_warning "No AI agent directories detected"
         return 1
     fi
 
     echo ""
-    log_info "偵測到 ${#detected[@]} 個代理"
+    log_info "Detected ${#detected[@]} agents"
 
     echo "${detected[@]}"
 }
@@ -1070,18 +1070,18 @@ detect_agents() {
 select_agents_interactive() {
     # 將所有互動輸出重定向到 stderr，只有最終結果輸出到 stdout
     {
-        log_section "選擇要啟用的代理"
+        log_section "Select agents to enable"
 
         local detected_agents=($(detect_agents_quiet))
 
         if [[ ${#detected_agents[@]} -eq 0 ]]; then
-            log_error "沒有偵測到任何代理"
+            log_error "No agents detected"
             return 1
         fi
 
         local selected=()
 
-        echo "請選擇要啟用同步的代理（空格鍵選擇，Enter 確認）："
+        echo "Select agents to enable sync (space to select, Enter to confirm):"
         echo ""
 
         for i in "${!detected_agents[@]}"; do
@@ -1089,7 +1089,7 @@ select_agents_interactive() {
 
             # 防禦性檢查：確保代理存在於映射表中
             if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
-                log_warning "跳過未知代理: $agent"
+                log_warning "Skip unknown agent: $agent"
                 continue
             fi
 
@@ -1099,9 +1099,9 @@ select_agents_interactive() {
             read -p "[$((i+1))] $name ($dir) [Y/n] " -r || true
             if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
                 selected+=("$agent")
-                log_success "已選擇: $name"
+                log_success "Selected: $name"
             else
-                log_info "已跳過: $name"
+                log_info "Skipped: $name"
             fi
         done
 
@@ -1118,30 +1118,30 @@ select_agents_interactive() {
 
 load_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        log_debug "配置文件不存在，返回空配置"
+        log_debug "Config file not found, returning empty config"
         echo "{}"
         return
     fi
 
-    log_debug "載入配置: $CONFIG_FILE"
+    log_debug "Loading config: $CONFIG_FILE"
 
     # 驗證 JSON 格式
     if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-        log_error "配置文件格式錯誤（無效的 JSON）"
+        log_error "Config file format error (invalid JSON)"
         echo ""
-        echo "${BOLD}${ICON_WARNING} 配置文件位置：${NC}$CONFIG_FILE"
+        echo "${BOLD}${ICON_WARNING} Config file:${NC} $CONFIG_FILE"
         echo ""
-        echo "${BOLD}${ICON_ROCKET} 建議操作：${NC}"
-        echo "  1. 檢查文件內容："
+        echo "${BOLD}${ICON_ROCKET} Suggested actions:${NC}"
+        echo "  1. Check file content:"
         echo "     ${CYAN}cat $CONFIG_FILE${NC}"
         echo ""
-        echo "  2. 驗證 JSON 語法："
+        echo "  2. Validate JSON syntax:"
         echo "     ${CYAN}jq . $CONFIG_FILE${NC}"
         echo ""
-        echo "  3. 重新初始化（會覆蓋現有配置）："
+        echo "  3. Re-initialize (will overwrite current config):"
         echo "     ${CYAN}rm $CONFIG_FILE && speckit-sync init${NC}"
         echo ""
-        echo "  4. 從備份恢復（如果有）："
+        echo "  4. Restore from backup (if available):"
         echo "     ${CYAN}cp $CONFIG_FILE.backup $CONFIG_FILE${NC}"
         return 1
     fi
@@ -1151,8 +1151,8 @@ load_config() {
     # 驗證必要欄位
     local version=$(echo "$config" | jq -r '.version // empty')
     if [[ -z "$version" ]]; then
-        log_warning "配置缺少版本號，可能需要升級"
-        log_info "執行 ${CYAN}upgrade${NC} 命令來升級配置"
+        log_warning "Config has no version; upgrade may be required"
+        log_info "Run ${CYAN}upgrade${NC} to upgrade config"
     fi
 
     echo "$config"
@@ -1173,18 +1173,18 @@ upgrade_config() {
     local config="$1"
     local current_version=$(get_config_version "$config")
 
-    log_info "當前配置版本: $current_version"
+    log_info "Current config version: $current_version"
 
     # v1.0.0 → v1.1.0：添加動態命令掃描
     if [[ "$current_version" == "1.0.0" ]]; then
-        log_info "升級配置: v1.0.0 → v1.1.0"
+        log_info "Upgrading config: v1.0.0 -> v1.1.0"
         config=$(echo "$config" | jq '.version = "1.1.0"')
         current_version="1.1.0"
     fi
 
     # v1.1.0 → v2.0.0：添加多代理支援
     if [[ "$current_version" == "1.1.0" ]]; then
-        log_info "升級配置: v1.1.0 → v2.0.0"
+        log_info "Upgrading config: v1.1.0 -> v2.0.0"
 
         # 將舊的 commands 結構轉換為 agents.claude
         local old_commands=$(echo "$config" | jq -r '.commands // {}')
@@ -1205,7 +1205,7 @@ upgrade_config() {
 
     # v2.0.0 → v2.1.0：添加模版支援
     if [[ "$current_version" == "2.0.0" ]]; then
-        log_info "升級配置: v2.0.0 → v2.1.0"
+        log_info "Upgrading config: v2.0.0 -> v2.1.0"
 
         config=$(echo "$config" | jq '
             .version = "2.1.0" |
@@ -1230,7 +1230,7 @@ get_available_templates() {
     local templates=()
 
     if [[ ! -d "$SPECKIT_TEMPLATES" ]]; then
-        log_warning "spec-kit 模版目錄不存在: $SPECKIT_TEMPLATES"
+        log_warning "spec-kit templates directory not found: $SPECKIT_TEMPLATES"
         return
     fi
 
@@ -1242,12 +1242,12 @@ get_available_templates() {
 }
 
 templates_list() {
-    log_header "可用模版列表"
+    log_header "Available templates"
 
     local templates=($(get_available_templates))
 
     if [[ ${#templates[@]} -eq 0 ]]; then
-        log_warning "未找到任何模版"
+        log_warning "No templates found"
         return
     fi
 
@@ -1272,11 +1272,11 @@ update_templates() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
-    log_header "同步 ${AGENT_NAMES[$agent]} 模版"
+    log_header "Sync ${AGENT_NAMES[$agent]} templates"
 
     local config=$(load_config)
     local commands_dir="$(resolve_agent_dir "$agent")"
@@ -1293,7 +1293,7 @@ update_templates() {
     done < <(echo "$config" | jq -r ".agents.${agent}.templates.selected[]" 2>/dev/null)
 
     # 建立目標目錄
-    dry_run_execute "建立模版目錄: $templates_dir" mkdir -p "$templates_dir" </dev/null
+    dry_run_execute "Create templates directory: $templates_dir" mkdir -p "$templates_dir" </dev/null
 
     echo ""
 
@@ -1306,34 +1306,34 @@ update_templates() {
         local dest="$templates_dir/$tpl"
 
         if [[ ! -f "$src" ]]; then
-            log_warning "$tpl - 來源檔案不存在於 spec-kit"
+            log_warning "$tpl - source file does not exist in spec-kit"
             : $((skipped++))
             continue
         fi
 
         # 檢查檔案是否已存在且相同
         if [[ -f "$dest" ]] && diff -q "$src" "$dest" >/dev/null 2>&1 </dev/null; then
-            log_info "$tpl - 已是最新"
+            log_info "$tpl - already up to date"
             : $((skipped++))
         else
-            dry_run_execute "同步模版: $tpl" cp "$src" "$dest" </dev/null
+            dry_run_execute "Sync template: $tpl" cp "$src" "$dest" </dev/null
             if [[ -f "$dest" ]]; then
-                log_success "$tpl - 已更新"
+                log_success "$tpl - updated"
                 : $((synced++))
             else
-                log_success "$tpl - 已新增"
+                log_success "$tpl - added"
                 : $((added++))
             fi
         fi
     done
 
     echo ""
-    log_info "統計："
-    echo "  ✅ 已同步: $synced"
-    echo "  ⊕  新增: $added"
-    echo "  ⊙  跳過: $skipped"
+    log_info "Summary:"
+    echo "  ✅ Synced: $synced"
+    echo "  ⊕  Added: $added"
+    echo "  ⊙  Skipped: $skipped"
     echo "  ═══════════"
-    echo "  📦 總計: $((synced + added + skipped))"
+    echo "  📦 Total: $((synced + added + skipped))"
 
     # 更新最後同步時間
     if [[ "$DRY_RUN" == false ]]; then
@@ -1342,7 +1342,7 @@ update_templates() {
         save_config "$config"
     fi
 
-    log_success "模版已同步到: $templates_dir"
+    log_success "Templates synced to: $templates_dir"
 }
 
 templates_select() {
@@ -1350,16 +1350,16 @@ templates_select() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
-    log_header "選擇 ${AGENT_NAMES[$agent]} 的模版"
+    log_header "Select templates for ${AGENT_NAMES[$agent]}"
 
     local templates=($(get_available_templates))
 
     if [[ ${#templates[@]} -eq 0 ]]; then
-        log_error "未找到任何模版"
+        log_error "No templates found"
         return 1
     fi
 
@@ -1367,7 +1367,7 @@ templates_select() {
     local selected=()
 
     echo ""
-    echo "可用模版："
+    echo "Available templates:"
     echo ""
 
     for i in "${!templates[@]}"; do
@@ -1376,17 +1376,17 @@ templates_select() {
     done
 
     echo ""
-    echo "選擇方式："
-    echo "  • 輸入數字（空格分隔）: 1 3 5"
-    echo "  • 輸入範圍: 1-3"
-    echo "  • 全選: a 或 all"
-    echo "  • 取消: q 或 quit"
+    echo "Selection options:"
+    echo "  • Enter numbers (space-separated): 1 3 5"
+    echo "  • Enter range: 1-3"
+    echo "  • Select all: a or all"
+    echo "  • Cancel: q or quit"
     echo ""
 
-    read -p "請選擇 > " -r
+    read -p "Choose > " -r
 
     if [[ "$REPLY" == "q" ]] || [[ "$REPLY" == "quit" ]]; then
-        log_info "已取消"
+        log_info "Cancelled"
         return 1
     fi
 
@@ -1414,7 +1414,7 @@ templates_select() {
     fi
 
     if [[ ${#selected[@]} -eq 0 ]]; then
-        log_warning "未選擇任何模版"
+        log_warning "No templates selected"
         return 1
     fi
 
@@ -1422,7 +1422,7 @@ templates_select() {
     selected=($(printf '%s\n' "${selected[@]}" | sort -u))
 
     echo ""
-    log_success "已選擇 ${#selected[@]} 個模版："
+    log_success "Selected ${#selected[@]} templates:"
     for tpl in "${selected[@]}"; do
         echo "  • $tpl"
     done
@@ -1434,7 +1434,7 @@ templates_select() {
     save_config "$config"
 
     echo ""
-    log_success "配置已更新"
+    log_success "Config updated"
 }
 
 # ==============================================================================
@@ -1479,7 +1479,7 @@ sync_command() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
@@ -1489,12 +1489,12 @@ sync_command() {
     local target="$PROJECT_ROOT/$commands_dir/$command"
 
     if [[ ! -f "$source" ]]; then
-        log_error "$command - 來源檔案不存在"
+        log_error "$command - source file does not exist"
         return 1
     fi
 
-    dry_run_execute "建立目錄: $(dirname "$target")" mkdir -p "$(dirname "$target")"
-    dry_run_execute "複製檔案: $source → $target" cp "$source" "$target"
+    dry_run_execute "Create directory: $(dirname "$target")" mkdir -p "$(dirname "$target")"
+    dry_run_execute "Copy file: $source -> $target" cp "$source" "$target"
     return 0
 }
 
@@ -1503,14 +1503,14 @@ check_updates() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENT_NAMES[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
-    log_header "檢查 ${AGENT_NAMES[$agent]} 更新"
+    log_header "Check ${AGENT_NAMES[$agent]} updates"
 
     # 自動更新 spec-kit
-    with_timing "spec-kit 更新檢查" update_speckit_repo
+    with_timing "spec-kit update check" update_speckit_repo
 
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
@@ -1528,37 +1528,37 @@ check_updates() {
 
         case "$status" in
             synced)
-                echo -e "${GREEN}✓${NC} $cmd - 已是最新"
+                echo -e "${GREEN}✓${NC} $cmd - up to date"
                 synced=$((synced + 1))
                 ;;
             outdated)
-                echo -e "${YELLOW}↻${NC} $cmd - 有更新可用"
+                echo -e "${YELLOW}↻${NC} $cmd - update available"
                 outdated=$((outdated + 1))
                 ;;
             new)
-                echo -e "${CYAN}⊕${NC} $cmd - 本地不存在（新命令）"
+                echo -e "${CYAN}⊕${NC} $cmd - missing locally (new command)"
                 new=$((new + 1))
                 ;;
             missing_source)
-                echo -e "${RED}✗${NC} $cmd - spec-kit 中不存在"
+                echo -e "${RED}✗${NC} $cmd - does not exist in spec-kit"
                 missing=$((missing + 1))
                 ;;
         esac
     done <<< "$commands"
 
     echo ""
-    log_info "統計："
-    echo "  ✅ 已同步: $synced"
-    echo "  ⊕  缺少: $new"
-    echo "  ↻  過時: $outdated"
-    echo "  ✗  遺失: $missing"
+    log_info "Summary:"
+    echo "  ✅ Synced: $synced"
+    echo "  ⊕  Missing: $new"
+    echo "  ↻  Outdated: $outdated"
+    echo "  ✗  Missing in source: $missing"
     echo "  ═══════════"
-    echo "  📦 總計: $((synced + new + outdated + missing))"
+    echo "  📦 Total: $((synced + new + outdated + missing))"
 
     if [[ $((new + outdated)) -gt 0 ]]; then
         echo ""
-        log_warning "發現 $((new + outdated)) 個命令需要更新"
-        log_info "執行 'update' 來更新"
+        log_warning "Found $((new + outdated)) commands that need updates"
+        log_info "Run 'update' to sync"
     fi
 }
 
@@ -1571,11 +1571,11 @@ update_commands() {
 
     # 防禦性檢查：確保代理存在
     if [[ ! -v AGENT_NAMES[$agent] ]] || [[ ! -v AGENTS[$agent] ]]; then
-        log_error "未知代理: $agent"
+        log_error "Unknown agent: $agent"
         return 1
     fi
 
-    log_header "同步 ${AGENT_NAMES[$agent]} 命令"
+    log_header "Sync ${AGENT_NAMES[$agent]} commands"
 
     local config=$(load_config)
     local commands=$(echo "$config" | jq -r ".agents.${agent}.commands.standard[]" 2>/dev/null)
@@ -1594,32 +1594,32 @@ update_commands() {
 
         case "$status" in
             synced)
-                log_info "$cmd - 已是最新，跳過"
+                log_info "$cmd - up to date, skipped"
                 skipped=$((skipped + 1))
                 ;;
             outdated)
                 if sync_command "$agent" "$cmd"; then
-                    log_success "$cmd - 已更新"
+                    log_success "$cmd - updated"
                     updated=$((updated + 1))
                 fi
                 ;;
             new)
                 if sync_command "$agent" "$cmd"; then
-                    log_success "$cmd - 新增"
+                    log_success "$cmd - added"
                     added=$((added + 1))
                 fi
                 ;;
             missing_source)
-                log_error "$cmd - spec-kit 中不存在"
+                log_error "$cmd - does not exist in spec-kit"
                 ;;
         esac
     done <<< "$commands"
 
     echo ""
-    log_header "同步完成"
-    echo "  ⊕  新增: $added 個"
-    echo "  ↻  更新: $updated 個"
-    echo "  ✓  跳過: $skipped 個"
+    log_header "Sync complete"
+    echo "  ⊕  Added: $added"
+    echo "  ↻  Updated: $updated"
+    echo "  ✓  Skipped: $skipped"
 }
 
 # ==============================================================================
@@ -1627,15 +1627,15 @@ update_commands() {
 # ==============================================================================
 
 update_all() {
-    log_header "一鍵同步"
+    log_header "One-click sync"
 
     local output_json="$JSON_OUTPUT"
     local has_failure=0
 
     if [[ "$DRY_RUN" == true ]]; then
-        log_info "[DRY-RUN] 略過 spec-kit 更新"
+        log_info "[DRY-RUN] Skipping spec-kit update"
     else
-        with_timing "spec-kit 更新檢查" update_speckit_repo
+        with_timing "spec-kit update check" update_speckit_repo
     fi
 
     local config
@@ -1664,7 +1664,7 @@ update_all() {
     fi
 
     if [[ ${#processing_order[@]} -eq 0 ]]; then
-        log_warning "未找到可處理的代理，請先執行 init 或創建代理目錄"
+        log_warning "No processable agents found. Run init or create agent directories first."
         return 0
     fi
 
@@ -1707,7 +1707,7 @@ update_all() {
         resolved_dir="$(resolve_agent_dir "$agent")"
 
         if [[ "$requires_cli" == true ]] && [[ "$has_cli" == false ]]; then
-            local message="${display} 已偵測到，但系統未找到 CLI (${cli_name})."
+            local message="${display} detected, but CLI not found (${cli_name})."
             summary_missing_cli+=("$display|$message")
             if [[ "$output_json" == true ]]; then
                 json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "skipped" --arg reason "missing_cli" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
@@ -1717,7 +1717,7 @@ update_all() {
         fi
 
         if [[ "$configured" != true ]]; then
-            local message="${display} 尚未在配置中啟用。"
+            local message="${display} is not enabled in config yet."
             summary_skipped+=("$display|$message")
             if [[ "$output_json" == true ]]; then
                 json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "skipped" --arg reason "not_configured" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
@@ -1727,7 +1727,7 @@ update_all() {
         fi
 
         if [[ "$DRY_RUN" == true ]]; then
-            local message="[DRY-RUN] ${display} 將執行命令與範本同步"
+            local message="[DRY-RUN] ${display} will sync commands and templates"
             summary_preview+=("$display|$message")
             if [[ "$output_json" == true ]]; then
                 json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "preview" --arg reason "dry_run" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
@@ -1736,7 +1736,7 @@ update_all() {
             continue
         fi
 
-        log_section "處理 $display"
+        log_section "Processing $display"
 
         local templates_enabled
         templates_enabled="$(printf '%s' "$config" | jq -r --arg agent "$agent" '(.agents // {})[$agent].templates.enabled // false' 2>/dev/null)"
@@ -1745,7 +1745,7 @@ update_all() {
         local template_status="disabled"
 
         if update_commands "$agent"; then
-            local message="${display} 命令同步完成"
+            local message="${display} command sync complete"
 
             if [[ "$templates_enabled" == "true" ]]; then
                 template_status="skipped"
@@ -1754,7 +1754,7 @@ update_all() {
                 else
                     template_status="failed"
                     has_failure=1
-                    local fail_msg="${display} 模版同步失敗"
+                    local fail_msg="${display} template sync failed"
                     summary_failed+=("$display|$fail_msg")
                     if [[ "$output_json" == true ]]; then
                         json_records+=("$(jq -cn --arg project "$PROJECT_ROOT" --arg agent "$agent" --arg name "$display" --arg status "failed" --arg reason "template_sync_failed" '{project:$project,agent:$agent,name:$name,status:$status,reason:$reason}')")
@@ -1773,7 +1773,7 @@ update_all() {
 
             log_success "$message"
         else
-            local message="${display} 命令同步失敗"
+            local message="${display} command sync failed"
             summary_failed+=("$display|$message")
             has_failure=1
             if [[ "$output_json" == true ]]; then
@@ -1786,10 +1786,10 @@ update_all() {
     done
 
     echo ""
-    log_header "一鍵更新摘要"
+    log_header "One-click update summary"
 
     if [[ ${#summary_success[@]} -eq 0 && ${#summary_preview[@]} -eq 0 && ${#summary_skipped[@]} -eq 0 && ${#summary_missing_cli[@]} -eq 0 && ${#summary_failed[@]} -eq 0 ]]; then
-        log_info "沒有可顯示的結果"
+        log_info "No results to display"
     fi
 
     local entry
@@ -1831,7 +1831,7 @@ update_all() {
             printf '[]' | jq '.' > "$JSON_REPORT_PATH"
         fi
         echo ""
-        log_info "JSON 報告已輸出到: $JSON_REPORT_PATH"
+        log_info "JSON report written to: $JSON_REPORT_PATH"
     fi
 
     return "$has_failure"
@@ -1843,58 +1843,58 @@ update_all() {
 # ==============================================================================
 
 wizard() {
-    log_header "SpecKit Sync 互動式設定精靈"
+    log_header "SpecKit Sync Interactive Setup Wizard"
 
     echo ""
-    echo -e "${BOLD}歡迎使用 SpecKit Sync！${NC}"
-    echo "這個精靈將協助您完成初始設定並開始同步命令。"
+    echo -e "${BOLD}Welcome to SpecKit Sync!${NC}"
+    echo "This wizard helps you complete initial setup and start syncing commands."
     echo ""
 
     # ==================== 步驟 1: 環境檢查 ====================
-    log_section "步驟 1/6: 環境檢查"
+    log_section "Step 1/6: Environment checks"
     echo ""
 
     # 檢查依賴
-    log_info "檢查必要工具..."
+    log_info "Checking required tools..."
     if ! check_dependencies; then
-        log_error "請先安裝必要工具後再執行精靈"
+        log_error "Install required tools before running the wizard"
         return 1
     fi
-    log_success "所有必要工具已安裝"
+    log_success "All required tools are installed"
 
     echo ""
 
     # 檢查 spec-kit 路徑
-    log_info "檢查 spec-kit 路徑..."
+    log_info "Checking spec-kit path..."
     if [[ ! -d "$SPECKIT_PATH" ]]; then
-        log_error "spec-kit 路徑無效: $SPECKIT_PATH"
+        log_error "Invalid spec-kit path: $SPECKIT_PATH"
         echo ""
-        echo "${BOLD}${ICON_ROCKET} 可選操作：${NC}"
-        echo "  1. 設定 SPECKIT_PATH 環境變數指向正確路徑"
-        echo "  2. 將 spec-kit 克隆到: $(dirname "$SCRIPT_DIR")/spec-kit"
+        echo "${BOLD}${ICON_ROCKET} Options:${NC}"
+        echo "  1. Set SPECKIT_PATH to the correct path"
+        echo "  2. Clone spec-kit to: $(dirname "$SCRIPT_DIR")/spec-kit"
         echo ""
-        read -p "是否要自動克隆 spec-kit？[y/N] " -r
+        read -p "Clone spec-kit automatically? [y/N] " -r
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             local clone_path="$(dirname "$SCRIPT_DIR")/spec-kit"
-            log_info "克隆 spec-kit 到 $clone_path..."
+            log_info "Cloning spec-kit to $clone_path..."
             if git clone https://github.com/github/github-models-template.git "$clone_path" 2>/dev/null; then
                 SPECKIT_PATH="$clone_path"
                 SPECKIT_COMMANDS="$SPECKIT_PATH/templates/commands"
                 SPECKIT_TEMPLATES="$SPECKIT_PATH/templates"
-                log_success "spec-kit 克隆成功"
+                log_success "spec-kit clone succeeded"
             else
-                log_error "克隆失敗，請手動設定"
+                log_error "Clone failed, please configure manually"
                 return 1
             fi
         else
             return 1
         fi
     else
-        log_success "spec-kit 路徑有效: $SPECKIT_PATH"
+        log_success "spec-kit path is valid: $SPECKIT_PATH"
 
         # 檢查是否需要更新
         if [[ -d "$SPECKIT_PATH/.git" ]]; then
-            log_info "檢查 spec-kit 更新..."
+            log_info "Checking spec-kit updates..."
             update_speckit_repo
         fi
     fi
@@ -1902,31 +1902,31 @@ wizard() {
     echo ""
 
     # ==================== 步驟 2: 偵測代理 ====================
-    log_section "步驟 2/6: 偵測 AI 代理"
+    log_section "Step 2/6: Detect AI agents"
     echo ""
 
-    log_info "掃描專案目錄..."
+    log_info "Scanning project directory..."
     local detected_agents=($(detect_agents_quiet))
 
     if [[ ${#detected_agents[@]} -eq 0 ]]; then
-        log_warning "未偵測到任何 AI 代理目錄"
+        log_warning "No AI agent directories detected"
         echo ""
-        echo "${BOLD}${ICON_INFO} 支援的代理及其目錄：${NC}"
+        echo "${BOLD}${ICON_INFO} Supported agents and directories:${NC}"
         for agent in "${!AGENTS[@]}"; do
             echo "  • ${AGENT_NAMES[$agent]}: ${AGENTS[$agent]}"
         done
         echo ""
-        read -p "是否要為 Claude Code 創建預設目錄？[y/N] " -r
+        read -p "Create default directory for Claude Code? [y/N] " -r
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             mkdir -p "$PROJECT_ROOT/.claude/commands"
-            log_success "已創建 .claude/commands 目錄"
+            log_success "Created .claude/commands directory"
             detected_agents=("claude")
         else
-            log_error "無可用代理，無法繼續"
+            log_error "No available agents, cannot continue"
             return 1
         fi
     else
-        log_success "偵測到 ${#detected_agents[@]} 個代理："
+        log_success "Detected ${#detected_agents[@]} agents:"
         for agent in "${detected_agents[@]}"; do
             echo "  ${GREEN}${ICON_SUCCESS}${NC} ${AGENT_NAMES[$agent]} ($(resolve_agent_dir "$agent"))"
         done
@@ -1934,17 +1934,17 @@ wizard() {
 
     echo ""
 
-    # ==================== 步驟 3: 選擇要啟用的代理 ====================
-    log_section "步驟 3/6: 選擇要啟用的代理"
+    # ==================== 步驟 3: Select agents to enable ====================
+    log_section "Step 3/6: Select agents to enable"
     echo ""
 
     local selected_agents=()
 
     if [[ ${#detected_agents[@]} -eq 1 ]]; then
-        log_info "只有一個代理，自動選擇: ${AGENT_NAMES[${detected_agents[0]}]}"
+        log_info "Only one agent detected, auto-selected: ${AGENT_NAMES[${detected_agents[0]}]}"
         selected_agents=("${detected_agents[0]}")
     else
-        echo "請選擇要啟用同步的代理："
+        echo "Please choose agents to enable sync:"
         echo ""
 
         for i in "${!detected_agents[@]}"; do
@@ -1952,91 +1952,91 @@ wizard() {
             local name="${AGENT_NAMES[$agent]}"
             local dir="$(resolve_agent_dir "$agent")"
 
-            read -p "  [$((i+1))] $name ($dir) - 啟用？[Y/n] " -r
+            read -p "  [$((i+1))] $name ($dir) - enable? [Y/n] " -r
             if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
                 selected_agents+=("$agent")
-                log_success "  已選擇: $name"
+                log_success "  Selected: $name"
             else
-                log_info "  已跳過: $name"
+                log_info "  Skipped: $name"
             fi
         done
     fi
 
     if [[ ${#selected_agents[@]} -eq 0 ]]; then
-        log_error "未選擇任何代理"
+        log_error "No agents selected"
         return 1
     fi
 
     echo ""
-    log_success "已選擇 ${#selected_agents[@]} 個代理"
+    log_success "Selected ${#selected_agents[@]} agents"
 
     echo ""
 
     # ==================== 步驟 4: 選擇同步策略 ====================
-    log_section "步驟 4/6: 選擇同步策略"
+    log_section "Step 4/6: Select sync strategy"
     echo ""
 
-    echo "${BOLD}同步策略選項：${NC}"
-    echo "  [1] 半自動模式（推薦）- 有衝突時詢問，自動備份"
-    echo "  [2] 完全自動模式 - 自動覆蓋，保留備份"
-    echo "  [3] 手動模式 - 每個檔案都確認"
+    echo "${BOLD}Sync strategy options:${NC}"
+    echo "  [1] Semi-auto (recommended) - ask on conflicts, auto backup"
+    echo "  [2] Full auto - overwrite automatically, keep backups"
+    echo "  [3] Manual - confirm every file"
     echo ""
 
     local strategy_mode="semi-auto"
     local on_conflict="ask"
 
-    read -p "請選擇 (1-3) [預設: 1]: " -r
+    read -p "Choose (1-3) [default: 1]: " -r
     case "${REPLY:-1}" in
         1)
             strategy_mode="semi-auto"
             on_conflict="ask"
-            log_success "已選擇：半自動模式"
+            log_success "Selected: semi-auto mode"
             ;;
         2)
             strategy_mode="auto"
             on_conflict="overwrite"
-            log_success "已選擇：完全自動模式"
+            log_success "Selected: full auto mode"
             ;;
         3)
             strategy_mode="manual"
             on_conflict="ask"
-            log_success "已選擇：手動模式"
+            log_success "Selected: manual mode"
             ;;
         *)
-            log_warning "無效選擇，使用預設值：半自動模式"
+            log_warning "Invalid choice, using default: semi-auto mode"
             ;;
     esac
 
     echo ""
 
     # ==================== 步驟 5: 選擇要同步的命令 ====================
-    log_section "步驟 5/6: 選擇要同步的命令"
+    log_section "Step 5/6: Select commands to sync"
     echo ""
 
-    log_info "掃描 spec-kit 中的可用命令..."
+    log_info "Scanning available commands in spec-kit..."
     local standard_commands=($(get_standard_commands_from_speckit))
 
     if [[ ${#standard_commands[@]} -eq 0 ]]; then
-        log_error "未找到任何命令"
+        log_error "No commands found"
         return 1
     fi
 
-    log_success "發現 ${#standard_commands[@]} 個標準命令"
+    log_success "Found ${#standard_commands[@]} standard commands"
     echo ""
 
-    echo "${BOLD}命令選擇：${NC}"
-    echo "  [1] 同步所有命令（推薦新專案）"
-    echo "  [2] 只同步核心命令（specify, plan, tasks, implement）"
-    echo "  [3] 自訂選擇"
+    echo "${BOLD}Command selection:${NC}"
+    echo "  [1] Sync all commands (recommended for new projects)"
+    echo "  [2] Sync core commands only (specify, plan, tasks, implement)"
+    echo "  [3] Custom selection"
     echo ""
 
     local selected_commands=()
 
-    read -p "請選擇 (1-3) [預設: 1]: " -r
+    read -p "Choose (1-3) [default: 1]: " -r
     case "${REPLY:-1}" in
         1)
             selected_commands=("${standard_commands[@]}")
-            log_success "已選擇：所有 ${#selected_commands[@]} 個命令"
+            log_success "Selected: all ${#selected_commands[@]} commands"
             ;;
         2)
             local core_commands=("specify.md" "plan.md" "tasks.md" "implement.md")
@@ -2045,18 +2045,18 @@ wizard() {
                     selected_commands+=("$cmd")
                 fi
             done
-            log_success "已選擇：${#selected_commands[@]} 個核心命令"
+            log_success "Selected: ${#selected_commands[@]} core commands"
             ;;
         3)
             echo ""
-            echo "${BOLD}可用命令：${NC}"
+            echo "${BOLD}Available commands:${NC}"
             for i in "${!standard_commands[@]}"; do
                 local cmd="${standard_commands[$i]}"
                 local desc=$(get_command_description "$SPECKIT_COMMANDS/$cmd")
                 printf "  [%2d] %s - %s\n" "$((i+1))" "$cmd" "$desc"
             done
             echo ""
-            echo "請輸入要同步的命令編號（空格分隔，Enter 結束）："
+            echo "Enter command numbers to sync (space-separated, Enter to finish):"
             read -p "> " -r
 
             for num in $REPLY; do
@@ -2067,14 +2067,14 @@ wizard() {
             done
 
             if [[ ${#selected_commands[@]} -eq 0 ]]; then
-                log_warning "未選擇任何命令，使用所有命令"
+                log_warning "No command selected, using all commands"
                 selected_commands=("${standard_commands[@]}")
             else
-                log_success "已選擇：${#selected_commands[@]} 個命令"
+                log_success "Selected: ${#selected_commands[@]} commands"
             fi
             ;;
         *)
-            log_warning "無效選擇，使用預設值：所有命令"
+            log_warning "Invalid selection, using default: all commands"
             selected_commands=("${standard_commands[@]}")
             ;;
     esac
@@ -2082,26 +2082,26 @@ wizard() {
     echo ""
 
     # ==================== 步驟 6: 創建配置並執行同步 ====================
-    log_section "步驟 6/6: 創建配置並執行同步"
+    log_section "Step 6/6: Create config and run sync"
     echo ""
 
     # 檢查是否已有配置
     if [[ -f "$CONFIG_FILE" ]]; then
-        log_warning "配置檔案已存在"
-        read -p "是否要覆蓋現有配置？[y/N] " -r
+        log_warning "Config file already exists"
+        read -p "Overwrite existing config? [y/N] " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_info "保留現有配置，結束精靈"
+            log_info "Keeping existing config, wizard finished"
             return 0
         fi
 
         # 備份現有配置
         local backup_file="$CONFIG_FILE.backup.$(date +%Y%m%d_%H%M%S)"
         cp "$CONFIG_FILE" "$backup_file"
-        log_success "現有配置已備份: $backup_file"
+        log_success "Existing config backed up: $backup_file"
     fi
 
     # 建立配置
-    log_info "創建配置檔案..."
+    log_info "Creating config file..."
 
     local config=$(cat <<EOF
 {
@@ -2154,15 +2154,15 @@ EOF
     done
 
     save_config "$config"
-    log_success "配置檔案已創建: $CONFIG_FILE"
+    log_success "Config file created: $CONFIG_FILE"
 
     echo ""
 
     # 詢問是否立即執行同步
-    read -p "是否要立即執行命令同步？[Y/n] " -r
+    read -p "Run command sync now? [Y/n] " -r
     if [[ -z "${REPLY:-}" ]] || [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
         echo ""
-        log_header "開始同步命令"
+        log_header "Start syncing commands"
 
         for agent in "${selected_agents[@]}"; do
             echo ""
@@ -2170,19 +2170,19 @@ EOF
         done
 
         echo ""
-        log_header "精靈完成"
+        log_header "Wizard complete"
         echo ""
-        log_success "設定完成！所有命令已同步。"
+        log_success "Setup complete! All commands are synced."
     else
         echo ""
-        log_header "精靈完成"
+        log_header "Wizard complete"
         echo ""
-        log_success "設定完成！"
+        log_success "Setup complete!"
         echo ""
-        log_info "下一步："
-        echo "  1. 執行 'check' 檢查更新"
-        echo "  2. 執行 'update' 同步命令"
-        echo "  3. 執行 'templates select' 選擇要同步的模版"
+        log_info "Next steps:"
+        echo "  1. Run 'check' to check updates"
+        echo "  2. Run 'update' to sync commands"
+        echo "  3. Run 'templates select' to choose templates"
     fi
 
     echo ""
@@ -2191,18 +2191,18 @@ EOF
 # ==============================================================================
 
 init_config() {
-    log_header "初始化 SpecKit Sync 配置"
+    log_header "Initialize SpecKit Sync config"
 
     if [[ -f "$CONFIG_FILE" ]]; then
-        log_warning "配置檔案已存在: $CONFIG_FILE"
-        read -p "是否要重新初始化？[y/N] " -r
+        log_warning "Config file already exists: $CONFIG_FILE"
+        read -p "Re-initialize? [y/N] " -r
         [[ ! $REPLY =~ ^[Yy]$ ]] && return
     fi
 
     # 檢查 spec-kit 路徑
     if [[ ! -d "$SPECKIT_PATH" ]]; then
-        log_error "spec-kit 路徑無效: $SPECKIT_PATH"
-        log_info "請設定正確的 SPECKIT_PATH 環境變數"
+        log_error "Invalid spec-kit path: $SPECKIT_PATH"
+        log_info "Please set a valid SPECKIT_PATH environment variable"
         return 1
     fi
 
@@ -2210,15 +2210,15 @@ init_config() {
     local detected_agents=($(detect_agents 2>/dev/null))
 
     if [[ ${#detected_agents[@]} -eq 0 ]]; then
-        log_error "未偵測到任何 AI 代理目錄"
-        log_info "請確保專案中至少有一個代理目錄（如 .claude/commands）"
+        log_error "No AI agent directories detected"
+        log_info "Ensure the project has at least one agent directory (e.g. .claude/commands)"
         return 1
     fi
 
     local selected_agents=($(select_agents_interactive))
 
     if [[ ${#selected_agents[@]} -eq 0 ]]; then
-        log_error "未選擇任何代理"
+        log_error "No agents selected"
         return 1
     fi
 
@@ -2259,7 +2259,7 @@ EOF
     for agent in "${selected_agents[@]}"; do
         # 防禦性檢查：確保代理存在
         if [[ ! -v AGENTS[$agent] ]]; then
-            log_warning "跳過未知代理: $agent"
+            log_warning "Skip unknown agent: $agent"
             continue
         fi
 
@@ -2289,16 +2289,16 @@ EOF
 
     save_config "$config"
 
-    log_success "初始化完成！"
-    log_info "配置檔案: $CONFIG_FILE"
-    log_info "已啟用代理: ${selected_agents[*]}"
-    log_info "偵測到 ${#standard_commands[@]} 個標準命令"
+    log_success "Initialization complete!"
+    log_info "Config file: $CONFIG_FILE"
+    log_info "Enabled agents: ${selected_agents[*]}"
+    log_info "Detected ${#standard_commands[@]} standard commands"
 
     echo ""
-    log_info "下一步："
-    echo "  1. 執行 'check' 檢查更新"
-    echo "  2. 執行 'update' 同步命令"
-    echo "  3. 執行 'templates select' 選擇要同步的模版"
+    log_info "Next steps:"
+    echo "  1. Run 'check' to check updates"
+    echo "  2. Run 'update' to sync commands"
+    echo "  3. Run 'templates select' to choose templates"
 }
 
 # ==============================================================================
@@ -2307,92 +2307,92 @@ EOF
 
 show_usage() {
     cat <<EOF
-${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
+${CYAN}${BOLD}SpecKit Sync - Integrated CLI v${VERSION}${NC}
 
-使用方式:
+Usage:
     $0 <command> [options]
 
-命令:
-    wizard                       互動式設定精靈（推薦新手使用）
-    init                         初始化配置
-    detect-agents                偵測可用的 AI 代理
-    check [options]              檢查更新狀態
-    update [options]             執行命令同步
-    scan [--agent <name>]        掃描並添加新命令
+Commands:
+    wizard                       interactive setup wizard (recommended for first-time setup)
+    init                         initialize config
+    detect-agents                detect available AI agents
+    check [options]              check update status
+    update [options]             run command sync
+    scan [--agent <name>]        scan and add new commands
     cleanup [--apply] [--all-projects] [--workspace-dir PATH]
-                                 清理 Spec-Kit 注入痕跡（預設為預覽）
-    update-all [options]         一鍵檢查並同步所有代理
+                                 clean Spec-Kit injected artifacts (preview by default)
+    update-all [options]         one-click check and sync for all agents
 
-    templates list               列出可用模版
-    templates select             選擇要同步的模版
-    templates sync               同步已選擇的模版
+    templates list               list available templates
+    templates select             select templates to sync
+    templates sync               sync selected templates
 
-    status                       顯示當前配置狀態
-    upgrade                      升級配置檔案版本
+    status                       show current config status
+    upgrade                      upgrade config file version
 
-選項:
-    --agent <name>               指定要操作的代理
-    --project-root <path>        指定目標專案路徑（預設: 當前目錄）
-    --path <path>                --project-root 縮寫
-    --all-agents                 自動偵測並處理所有代理（忽略配置檔啟用狀態）
-    --dry-run, -n                預覽模式（顯示將執行的操作但不實際執行）
-    --quiet, -q                  安靜模式（僅顯示錯誤）
-    --verbose, -v                詳細模式（顯示額外資訊）
-    --debug                      除錯模式（顯示所有訊息和計時）
-    --json                       在 update-all 時輸出 JSON 報告
-    --apply                      與 cleanup 搭配，實際執行刪除/改寫
-    --all-projects               與 cleanup 搭配，掃描 workspace 下所有 repo
-    --workspace-dir <path>       與 cleanup --all-projects 搭配（推薦）
-    --github-dir <path>          --workspace-dir 相容別名
-    --help                       顯示此幫助訊息
+Options:
+    --agent <name>               specify target agent
+    --project-root <path>        specify target project path (default: current directory)
+    --path <path>                shorthand for --project-root
+    --all-agents                 auto-detect and process all agents (ignores enabled flags in config)
+    --dry-run, -n                preview mode (show actions without executing)
+    --quiet, -q                  quiet mode (errors only)
+    --verbose, -v                verbose mode (extra details)
+    --debug                      debug mode (all messages + timing)
+    --json                       output JSON report for update-all
+    --apply                      with cleanup, actually perform delete/rewrite
+    --all-projects               with cleanup, scan all repos under workspace
+    --workspace-dir <path>       with cleanup --all-projects (recommended)
+    --github-dir <path>          compatibility alias for --workspace-dir
+    --help                       show this help message
 
-環境變數:
-    SPECKIT_PATH                 spec-kit 倉庫路徑 (預設: ../spec-kit)
-    VERBOSITY                    輸出層級: quiet|normal|verbose|debug (預設: normal)
-    WORKSPACE_DIR                cleanup 批次掃描根目錄 (預設: 目前目錄)
-    GITHUB_DIR                   WORKSPACE_DIR 的相容別名
+Environment Variables:
+    SPECKIT_PATH                 spec-kit repository path (default: ../spec-kit)
+    VERBOSITY                    output level: quiet|normal|verbose|debug (default: normal)
+    WORKSPACE_DIR                root for cleanup batch scan (default: current directory)
+    GITHUB_DIR                   compatibility alias for WORKSPACE_DIR
 
-範例:
-    # 使用互動式精靈（推薦第一次使用）
+Examples:
+    # Use interactive wizard (recommended first run)
     $0 wizard
 
-    # 初始化配置（進階用戶）
+    # Initialize config (advanced users)
     $0 init
 
-    # 檢查配置中啟用的代理
+    # Check enabled agents in config
     $0 check
 
-    # 檢查所有偵測到的代理（不管是否啟用）
+    # Check all detected agents (regardless of enabled status)
     $0 check --all-agents
 
-    # 只檢查 claude 代理
+    # Check only claude agent
     $0 check --agent claude
 
-    # 更新配置中啟用的代理
+    # Update enabled agents in config
     $0 update
 
-    # 更新所有偵測到的代理
+    # Update all detected agents
     $0 update --all-agents
 
-    # 掃描新命令
+    # Scan for new commands
     $0 scan
 
-    # 預覽清理 Spec-Kit 痕跡
+    # Preview cleanup of Spec-Kit artifacts
     $0 cleanup
 
-    # 套用清理
+    # Apply cleanup
     $0 cleanup --apply
 
-    # 指定單一專案路徑（不需先 cd）
+    # Run against a specific project path (no need to cd first)
     $0 status --project-root /path/to/my-project
 
-    # 批次預覽清理（不用 batch-sync-all.sh）
+    # Batch preview cleanup (without batch-sync-all.sh)
     $0 cleanup --all-projects --workspace-dir /path/to/workspace
 
-    # 批次套用清理
+    # Batch apply cleanup
     $0 cleanup --all-projects --workspace-dir /path/to/workspace --apply
 
-    # 選擇並同步模版
+    # Select and sync templates
     $0 templates select
     $0 templates sync
 
@@ -2400,10 +2400,10 @@ EOF
 }
 
 show_status() {
-    log_header "配置狀態"
+    log_header "Config status"
 
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        log_warning "配置檔案不存在，請先執行 'init'"
+        log_warning "Config file does not exist, run 'init' first"
         return 1
     fi
 
@@ -2411,12 +2411,12 @@ show_status() {
     local version=$(get_config_version "$config")
 
     echo ""
-    log_info "配置版本: $version"
-    log_info "專案名稱: $(echo "$config" | jq -r '.metadata.project_name')"
-    log_info "初始化時間: $(echo "$config" | jq -r '.metadata.initialized')"
+    log_info "Config version: $version"
+    log_info "Project name: $(echo "$config" | jq -r '.metadata.project_name')"
+    log_info "Initialized at: $(echo "$config" | jq -r '.metadata.initialized')"
 
     echo ""
-    log_section "已啟用代理"
+    log_section "Enabled agents"
 
     local agents=$(echo "$config" | jq -r '.agents | keys[]' 2>/dev/null)
     while IFS= read -r agent; do
@@ -2432,12 +2432,12 @@ show_status() {
         local cmd_count=$(echo "$config" | jq -r ".agents.${agent}.commands.standard | length")
 
         if [[ "$enabled" == "true" ]]; then
-            echo "  ✓ ${AGENT_NAMES[$agent]} ($dir) - $cmd_count 個命令"
+            echo "  ✓ ${AGENT_NAMES[$agent]} ($dir) - $cmd_count commands"
         fi
     done <<< "$agents"
 
     echo ""
-    log_section "模版同步狀態"
+    log_section "Template sync status"
 
     local has_templates=false
     while IFS= read -r agent; do
@@ -2450,20 +2450,20 @@ show_status() {
 
         local tpl_enabled=$(echo "$config" | jq -r ".agents.${agent}.templates.enabled")
         local tpl_count=$(echo "$config" | jq -r ".agents.${agent}.templates.selected | length")
-        local tpl_sync=$(echo "$config" | jq -r ".agents.${agent}.templates.last_sync // \"從未同步\"")
+        local tpl_sync=$(echo "$config" | jq -r ".agents.${agent}.templates.last_sync // \"Never synced\"")
 
         if [[ "$tpl_enabled" == "true" ]] || [[ "$tpl_count" != "0" ]]; then
             has_templates=true
             echo "  ${AGENT_NAMES[$agent]}:"
-            echo "    • 狀態: $([ "$tpl_enabled" == "true" ] && echo "已啟用" || echo "未啟用")"
-            echo "    • 已選擇: $tpl_count 個模版"
-            echo "    • 最後同步: $tpl_sync"
+            echo "    • Status: $([ "$tpl_enabled" == "true" ] && echo "enabled" || echo "disabled")"
+            echo "    • Selected: $tpl_count templates"
+            echo "    • Last sync: $tpl_sync"
         fi
     done <<< "$agents"
 
     if [[ "$has_templates" == false ]]; then
-        echo "  未配置任何代理的模版"
-        echo "  執行 'templates select --agent <name>' 開始"
+        echo "  No templates configured for any agents"
+        echo "  Run 'templates select --agent <name>' to start"
     fi
 }
 
@@ -2542,19 +2542,19 @@ main() {
 
     if [[ -n "$project_root_override" ]]; then
         if [[ ! -d "$project_root_override" ]]; then
-            log_error "專案路徑不存在: $project_root_override"
+            log_error "Project path does not exist: $project_root_override"
             exit 1
         fi
         PROJECT_ROOT="$(cd "$project_root_override" && pwd)"
         CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
-        log_info "使用專案路徑: $PROJECT_ROOT"
+        log_info "Using project path: $PROJECT_ROOT"
     fi
 
     # cleanup 給「只拿來移除」使用者：採最小依賴，不要求 git/jq
     if [[ "$command" == "cleanup" ]]; then
-        with_timing "依賴檢查" check_dependencies diff grep find awk || exit 1
+        with_timing "Dependency check" check_dependencies diff grep find awk || exit 1
     else
-        with_timing "依賴檢查" check_dependencies || exit 1
+        with_timing "Dependency check" check_dependencies || exit 1
     fi
 
     case "$command" in
@@ -2572,15 +2572,15 @@ main() {
                 check_updates "$agent"
             elif [[ "$all_agents" == true ]]; then
                 # 檢查所有偵測到的代理（不管配置中是否啟用）
-                log_info "偵測所有代理並檢查更新..."
+                log_info "Detecting all agents and checking updates..."
                 local detected_agents=($(detect_agents_quiet))
 
                 if [[ ${#detected_agents[@]} -eq 0 ]]; then
-                    log_warning "未偵測到任何 AI 代理目錄"
+                    log_warning "No AI agent directories detected"
                     return 1
                 fi
 
-                log_info "發現 ${#detected_agents[@]} 個代理"
+                log_info "Found ${#detected_agents[@]} agents"
                 echo ""
 
                 for ag in "${detected_agents[@]}"; do
@@ -2604,15 +2604,15 @@ main() {
                 update_commands "$agent"
             elif [[ "$all_agents" == true ]]; then
                 # 更新所有偵測到的代理（不管配置中是否啟用）
-                log_info "偵測所有代理並更新..."
+                log_info "Detecting all agents and updating..."
                 local detected_agents=($(detect_agents_quiet))
 
                 if [[ ${#detected_agents[@]} -eq 0 ]]; then
-                    log_warning "未偵測到任何 AI 代理目錄"
+                    log_warning "No AI agent directories detected"
                     return 1
                 fi
 
-                log_info "發現 ${#detected_agents[@]} 個代理"
+                log_info "Found ${#detected_agents[@]} agents"
                 echo ""
 
                 for ag in "${detected_agents[@]}"; do
@@ -2635,7 +2635,7 @@ main() {
             if [[ -n "$agent" ]]; then
                 scan_new_commands "$agent"
             else
-                log_error "請指定代理: --agent <name>"
+                log_error "Please specify agent: --agent <name>"
                 exit 1
             fi
             ;;
@@ -2643,7 +2643,7 @@ main() {
             CLEANUP_APPLY="$cleanup_apply"
             if [[ "$DRY_RUN" == true ]]; then
                 CLEANUP_APPLY=false
-                log_info "--dry-run 已啟用，cleanup 將以預覽模式執行"
+                log_info "--dry-run enabled, cleanup will run in preview mode"
             fi
 
             if [[ "$cleanup_all_projects_flag" == true ]]; then
@@ -2669,7 +2669,7 @@ main() {
             fi
             ;;
         rollback)
-            log_warning "備份功能已移除。如需還原，請使用 git checkout 還原檔案。"
+            log_warning "Backup command removed. Use git checkout to restore files if needed."
             exit 0
             ;;
         update-all)
@@ -2688,7 +2688,7 @@ main() {
                         local detected_agents=($(detect_agents_quiet))
 
                         if [[ ${#detected_agents[@]} -eq 0 ]]; then
-                            log_warning "未偵測到任何 AI 代理目錄"
+                            log_warning "No AI agent directories detected"
                             return 1
                         fi
 
@@ -2702,7 +2702,7 @@ main() {
                         local agents=$(echo "$config" | jq -r '.agents | to_entries[] | select(.value.enabled == true) | .key')
 
                         if [[ -z "$agents" ]]; then
-                            log_error "未找到啟用的代理，請先執行 init"
+                            log_error "No enabled agents found, run init first"
                             return 1
                         fi
 
@@ -2721,11 +2721,11 @@ main() {
                         local detected_agents=($(detect_agents_quiet))
 
                         if [[ ${#detected_agents[@]} -eq 0 ]]; then
-                            log_warning "未偵測到任何 AI 代理目錄"
+                            log_warning "No AI agent directories detected"
                             return 1
                         fi
 
-                        log_info "發現 ${#detected_agents[@]} 個代理"
+                        log_info "Found ${#detected_agents[@]} agents"
                         echo ""
 
                         for ag in "${detected_agents[@]}"; do
@@ -2745,8 +2745,8 @@ main() {
                     fi
                     ;;
                 *)
-                    log_error "未知的模版命令: $subcommand"
-                    echo "可用命令: list, select, sync"
+                    log_error "Unknown template command: $subcommand"
+                    echo "Available commands: list, select, sync"
                     exit 1
                     ;;
             esac
@@ -2758,13 +2758,13 @@ main() {
             local config=$(load_config)
             config=$(upgrade_config "$config")
             save_config "$config"
-            log_success "配置已升級到 v$(get_config_version "$config")"
+            log_success "Config upgraded to v$(get_config_version "$config")"
             ;;
         --help|-h|help)
             show_usage
             ;;
         *)
-            log_error "未知命令: $command"
+            log_error "Unknown command: $command"
             echo ""
             show_usage
             exit 1

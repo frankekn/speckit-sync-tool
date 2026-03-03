@@ -249,7 +249,7 @@ process_project() {
 
     log_section "Processing project: $project_name"
 
-    cd "$project_dir" || return 2  # 失敗：無法進入目錄
+    cd "$project_dir" || return 2  # failure: cannot enter directory
 
     # Check if initialized
     if [ ! -f ".speckit-sync.json" ]; then
@@ -261,20 +261,20 @@ process_project() {
             if [ "${ans:-N}" = "y" ]; then
                 if ! VERBOSITY="$VERBOSITY" $SYNC_TOOL init; then
                     log_error "Initialization failed"
-                    return 2  # 失敗：初始化失敗
+                    return 2  # failure: init failed
                 fi
             else
                 log_info "Skipped initialization"
-                return 1  # 跳過：用戶選擇不初始化
+                return 1  # skipped: user chose not to init
             fi
         elif [ "$mode" = "auto" ] || [ "$mode" = "one-click" ]; then
             log_info "Auto-initializing..."
             if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL init; then
                 log_error "Auto-initialization failed"
-                return 2  # 失敗：自動初始化失敗
+                return 2  # failure: auto init failed
             fi
         else
-            return 1  # 跳過：check-only 模式且未初始化
+            return 1  # skipped: check-only mode and not initialized
         fi
     fi
 
@@ -292,13 +292,13 @@ process_project() {
     echo ""
     if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL check; then
         log_error "Check failed for $project_name"
-        return 2  # 失敗：檢查失敗
+        return 2  # failure: check failed
     fi
 
     # Decide whether to update based on mode
     if [ "$mode" = "check-only" ]; then
         log_info "Check-only mode, skipping update"
-        return 0  # 成功：check-only 模式完成
+        return 0  # success: check-only completed
     fi
 
     echo ""
@@ -309,20 +309,20 @@ process_project() {
         if [ "${ans:-N}" = "y" ]; then
             if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL update; then
                 log_error "Update failed for $project_name"
-                return 2  # 失敗：更新失敗
+                return 2  # failure: update failed
             fi
-            return 0  # 成功：更新完成
+            return 0  # success: update completed
         else
             log_info "Skipped update"
-            return 1  # 跳過：用戶選擇不更新
+            return 1  # skipped: user chose not to update
         fi
     elif [ "$mode" = "auto" ]; then
         log_info "Auto-updating..."
         if ! SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" $SYNC_TOOL update; then
             log_error "Auto-update failed for $project_name"
-            return 2  # 失敗：自動更新失敗
+            return 2  # failure: auto update failed
         fi
-        return 0  # 成功：自動更新完成
+        return 0  # success: auto update completed
     fi
 }
 
@@ -497,13 +497,13 @@ batch_sync() {
         fi
 
         case $exit_code in
-            0)  # 成功
+            0)  # success
                 success=$((success + 1))
                 ;;
-            1)  # 跳過
+            1)  # skipped
                 skipped=$((skipped + 1))
                 ;;
-            *)  # 失敗（2 或其他非零值）
+            *)  # failed (2 or other non-zero codes)
                 failed=$((failed + 1))
                 ;;
         esac
@@ -681,7 +681,7 @@ main() {
         case $1 in
             --auto)
                 if [[ "$cleanup_mode" == true ]]; then
-                    log_error "--auto 不能和 --cleanup 同時使用"
+                    log_error "--auto cannot be used with --cleanup"
                     exit 1
                 fi
                 mode="auto"
@@ -689,7 +689,7 @@ main() {
                 ;;
             --check-only)
                 if [[ "$cleanup_mode" == true ]]; then
-                    log_error "--check-only 不能和 --cleanup 同時使用"
+                    log_error "--check-only cannot be used with --cleanup"
                     exit 1
                 fi
                 mode="check-only"
@@ -697,7 +697,7 @@ main() {
                 ;;
             --one-click)
                 if [[ "$cleanup_mode" == true ]]; then
-                    log_error "--one-click 不能和 --cleanup 同時使用"
+                    log_error "--one-click cannot be used with --cleanup"
                     exit 1
                 fi
                 mode="one-click"
@@ -705,7 +705,7 @@ main() {
                 ;;
             --cleanup)
                 if [[ "$mode" != "interactive" ]]; then
-                    log_error "--cleanup 不能和 --auto/--check-only/--one-click 同時使用"
+                    log_error "--cleanup cannot be used with --auto/--check-only/--one-click"
                     exit 1
                 fi
                 cleanup_mode=true
@@ -757,7 +757,7 @@ main() {
         batch_cleanup "$cleanup_apply"
     else
         if [[ "$cleanup_apply" == true ]]; then
-            log_error "--apply 只能和 --cleanup 一起使用"
+            log_error "--apply can only be used with --cleanup"
             exit 1
         fi
         batch_sync "$mode"

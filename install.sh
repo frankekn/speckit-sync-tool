@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 #
-# 安裝 speckit-sync 全局工具
+# Install speckit-sync as a global tool
 #
-# 使用方式：
-#   ./install.sh        # 安裝到 ~/bin
-#   ./install.sh uninstall  # 解除安裝
+# Usage:
+#   ./install.sh            # install to ~/bin
+#   ./install.sh uninstall  # uninstall
 #
 
 set -e
 
-# 顏色
+# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# 安裝目錄
+# Install directory
 INSTALL_DIR="${INSTALL_DIR:-$HOME/bin}"
 
-# 工具名稱
+# Tool name
 TOOL_NAME="speckit-sync"
 
-# 腳本目錄
+# Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log_info() {
@@ -38,79 +38,79 @@ log_warning() {
 
 install_tool() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}安裝 Spec-Kit 同步工具${NC}"
+    echo -e "${BLUE}Install Spec-Kit Sync Tool${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
-    # 建立安裝目錄
+    # Create install directory
     if [ ! -d "$INSTALL_DIR" ]; then
-        log_info "建立目錄: $INSTALL_DIR"
+        log_info "Creating directory: $INSTALL_DIR"
         mkdir -p "$INSTALL_DIR"
     fi
 
-    # 建立符號連結
-    log_info "建立符號連結..."
+    # Create symlink
+    log_info "Creating symlink..."
 
     ln -sf "$SCRIPT_DIR/sync-commands-integrated.sh" "$INSTALL_DIR/$TOOL_NAME"
     chmod +x "$INSTALL_DIR/$TOOL_NAME"
 
-    log_success "已建立: $INSTALL_DIR/$TOOL_NAME -> $SCRIPT_DIR/sync-commands-integrated.sh"
+    log_success "Created: $INSTALL_DIR/$TOOL_NAME -> $SCRIPT_DIR/sync-commands-integrated.sh"
 
-    # 檢查 PATH
+    # Check PATH
     echo ""
     if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-        log_warning "⚠️  $INSTALL_DIR 不在你的 PATH 中"
+        log_warning "⚠️  $INSTALL_DIR is not in your PATH"
         echo ""
-        echo "請將以下行加入你的 shell 配置檔案 (~/.bashrc 或 ~/.zshrc):"
+        echo "Add the following line to your shell profile (~/.bashrc or ~/.zshrc):"
         echo ""
         echo "  export PATH=\"\$HOME/bin:\$PATH\""
         echo ""
     else
-        log_success "$INSTALL_DIR 已在 PATH 中"
+        log_success "$INSTALL_DIR is already in PATH"
     fi
 
     echo ""
-    log_success "✨ 安裝完成！"
+    log_success "✨ Installation complete!"
     echo ""
-    echo "現在你可以在任何地方使用以下命令："
+    echo "You can now run these commands from anywhere:"
     echo ""
-    echo "  ${GREEN}$TOOL_NAME init${NC}     - 初始化專案"
-    echo "  ${GREEN}$TOOL_NAME check${NC}    - 檢查更新"
-    echo "  ${GREEN}$TOOL_NAME update${NC}   - 執行同步"
-    echo "  ${GREEN}$TOOL_NAME status${NC}   - 顯示狀態"
-    echo "  ${GREEN}$TOOL_NAME diff CMD${NC} - 顯示差異"
+    echo "  ${GREEN}$TOOL_NAME init${NC}     - initialize project"
+    echo "  ${GREEN}$TOOL_NAME check${NC}    - check updates"
+    echo "  ${GREEN}$TOOL_NAME update${NC}   - run sync"
+    echo "  ${GREEN}$TOOL_NAME status${NC}   - show status"
+    echo "  ${GREEN}$TOOL_NAME diff CMD${NC} - show differences"
     echo ""
 }
 
 uninstall_tool() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}解除安裝 Spec-Kit 同步工具${NC}"
+    echo -e "${BLUE}Uninstall Spec-Kit Sync Tool${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
     if [ -L "$INSTALL_DIR/$TOOL_NAME" ]; then
         rm "$INSTALL_DIR/$TOOL_NAME"
-        log_success "已移除: $INSTALL_DIR/$TOOL_NAME"
+        log_success "Removed: $INSTALL_DIR/$TOOL_NAME"
     else
-        log_warning "工具未安裝: $INSTALL_DIR/$TOOL_NAME"
+        log_warning "Tool is not installed: $INSTALL_DIR/$TOOL_NAME"
     fi
 
     echo ""
-    log_success "解除安裝完成"
+    log_success "Uninstall complete"
 }
 
 show_usage() {
     cat << EOF
-Spec-Kit 同步工具 - 安裝程式
+Spec-Kit Sync Tool - Installer
 
-使用方式:
-    $0                # 安裝工具
-    $0 uninstall      # 解除安裝
+Usage:
+    $0                # install tool
+    $0 uninstall      # uninstall
 
-環境變數:
-    INSTALL_DIR       安裝目錄 (預設: ~/bin)
+Environment Variables:
+    INSTALL_DIR       install directory (default: ~/bin)
 
-安裝後，你可以在任何專案目錄執行:
+After installation, you can run in any project directory:
     speckit-sync init
     speckit-sync check
     speckit-sync update
@@ -133,7 +133,7 @@ main() {
             show_usage
             ;;
         *)
-            echo "未知命令: $command"
+            echo "Unknown command: $command"
             echo ""
             show_usage
             exit 1
