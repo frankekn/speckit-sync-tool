@@ -57,7 +57,7 @@
 
 ```bash
 # Clone 此仓库
-cd ~/Documents/GitHub
+cd /path/to/workspace
 git clone https://github.com/frankekn/speckit-sync-tool.git
 
 # 全局安装（可选）
@@ -75,41 +75,41 @@ cd speckit-sync-tool
 
 ```bash
 # 1. 进入你的项目
-cd ~/Documents/GitHub/my-project
+cd /path/to/workspace/my-project
 
 # 2. 初始化（会自动侦测代理）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh init
+/path/to/speckit-sync-tool/sync-commands-integrated.sh init
 
 # 3. 检查更新
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh check
+/path/to/speckit-sync-tool/sync-commands-integrated.sh check
 
 # 4. 执行同步
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh update
+/path/to/speckit-sync-tool/sync-commands-integrated.sh update
 
 # 5. 选择并同步模板（可选）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates select
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates sync
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates select
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates sync
 
 # 6. 反向清理（预览 / 实际执行）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --apply
+/path/to/speckit-sync-tool/sync-commands-integrated.sh cleanup
+/path/to/speckit-sync-tool/sync-commands-integrated.sh cleanup --apply
 
 # 7. 指定项目路径执行（无需先 cd）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh status --project-root /path/to/project
+/path/to/speckit-sync-tool/sync-commands-integrated.sh status --project-root /path/to/project
 
 # 8. 使用主脚本批量清理（无需 batch-sync-all.sh）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
+/path/to/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
+/path/to/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 批量清理多个仓库：
 
 ```bash
 # 预览
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup
 
 # 实际执行
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ## 📚 完整文档

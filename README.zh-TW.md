@@ -45,7 +45,7 @@
 
 ```bash
 # Clone 此倉庫
-cd ~/Documents/GitHub
+cd /path/to/workspace
 git clone https://github.com/your-username/speckit-sync-tool.git
 
 # 全局安裝（可選）
@@ -63,52 +63,52 @@ cd speckit-sync-tool
 
 ```bash
 # 1. 進入你的專案
-cd ~/Documents/GitHub/my-project
+cd /path/to/workspace/my-project
 
 # 2. 初始化（會自動偵測代理）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh init
+/path/to/speckit-sync-tool/sync-commands-integrated.sh init
 
 # 3. 檢查更新
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh check
+/path/to/speckit-sync-tool/sync-commands-integrated.sh check
 
 # 4. 執行同步
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh update
+/path/to/speckit-sync-tool/sync-commands-integrated.sh update
 
 # 5. 選擇並同步模版（可選）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates select
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates sync
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates select
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates sync
 ```
 
 ### 使用基礎版本（僅 Claude）
 
 ```bash
 # 如果只需要同步 Claude 的命令
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh init
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh check
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh update
+/path/to/speckit-sync-tool/sync-commands.sh init
+/path/to/speckit-sync-tool/sync-commands.sh check
+/path/to/speckit-sync-tool/sync-commands.sh update
 ```
 
 ### 批次同步多個專案
 
 ```bash
 # 自動掃描並同步所有專案
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh
+/path/to/speckit-sync-tool/batch-sync-all.sh
 
 # 或自動模式（不詢問）
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --auto
+/path/to/speckit-sync-tool/batch-sync-all.sh --auto
 
 # 預覽清理所有 repo 的 Spec-Kit 痕跡
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup
 
 # 實際清理所有 repo
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ### 使用全局命令（需先安裝）
 
 ```bash
 # 任何專案目錄都可以使用
-cd ~/Documents/GitHub/any-project
+cd /path/to/any-project
 speckit-sync init
 speckit-sync check
 speckit-sync update
@@ -409,14 +409,14 @@ v2.1.0 (+ 模版)
 
 ```bash
 # 推薦使用整合版本，獲得所有功能
-ln -s ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh ~/bin/speckit-sync
+ln -s /path/to/speckit-sync-tool/sync-commands-integrated.sh ~/bin/speckit-sync
 ```
 
 ### 2. 定期檢查更新
 
 ```bash
 # 建議每週執行一次
-cd ~/Documents/GitHub
+cd /path/to/workspace
 ./speckit-sync-tool/batch-sync-all.sh --check-only
 ```
 
@@ -522,7 +522,7 @@ jobs:
 
 ```bash
 # 複製 Makefile 範本
-cp ~/Documents/GitHub/speckit-sync-tool/Makefile.template my-project/.claude/Makefile
+cp /path/to/speckit-sync-tool/Makefile.template my-project/.claude/Makefile
 
 # 在專案中使用
 make -C .claude sync-check
@@ -535,14 +535,14 @@ make -C .claude sync-status
 ### 問題 1：找不到 spec-kit
 
 ```
-✗ spec-kit 路徑無效: /Users/termtek/Documents/GitHub/spec-kit
+✗ spec-kit 路徑無效: /path/to/spec-kit
 ```
 
 **解決方法**：
 
 ```bash
 # 檢查 spec-kit 是否存在
-ls ~/Documents/GitHub/spec-kit
+ls /path/to/spec-kit
 
 # 設定正確的路徑
 export SPECKIT_PATH=/correct/path/to/spec-kit
@@ -568,7 +568,7 @@ mkdir -p .cursor/commands
 **解決方法**：
 
 ```bash
-chmod +x ~/Documents/GitHub/speckit-sync-tool/*.sh
+chmod +x /path/to/speckit-sync-tool/*.sh
 ```
 
 ### 問題 4：配置版本過舊

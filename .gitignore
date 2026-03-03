@@ -60,3 +60,11 @@ temp/
 
 # Local agent workspace artifacts
 .kiro/
+
+# Internal audit/debug reports (keep local only)
+DRY_RUN_IMPLEMENTATION_COMPLETE.md
+DRY_RUN_IMPLEMENTATION_GUIDE.md
+QUALITY_ASSESSMENT_REPORT.md
+TEST_REPORT_FINAL.md
+VERBOSITY_IMPLEMENTATION.md
+VERBOSITY_QUICK_REFERENCE.md

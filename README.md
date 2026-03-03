@@ -49,7 +49,7 @@ When you have multiple projects using spec-kit commands, manually updating each 
 
 ```bash
 # Clone this repository
-cd ~/Documents/GitHub
+cd /path/to/workspace
 git clone https://github.com/frankekn/speckit-sync-tool.git
 
 # Global installation (optional)
@@ -67,52 +67,52 @@ Download the repository ZIP file and extract to any location.
 
 ```bash
 # 1. Navigate to your project
-cd ~/Documents/GitHub/my-project
+cd /path/to/workspace/my-project
 
 # 2. Initialize (auto-detects agents)
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh init
+/path/to/speckit-sync-tool/sync-commands-integrated.sh init
 
 # 3. Check for updates
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh check
+/path/to/speckit-sync-tool/sync-commands-integrated.sh check
 
 # 4. Execute sync
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh update
+/path/to/speckit-sync-tool/sync-commands-integrated.sh update
 
 # 5. Select and sync templates (optional)
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates select
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates sync
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates select
+/path/to/speckit-sync-tool/sync-commands-integrated.sh templates sync
 ```
 
 ### Using Basic Version (Claude only)
 
 ```bash
 # If you only need Claude command sync
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh init
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh check
-~/Documents/GitHub/speckit-sync-tool/sync-commands.sh update
+/path/to/speckit-sync-tool/sync-commands.sh init
+/path/to/speckit-sync-tool/sync-commands.sh check
+/path/to/speckit-sync-tool/sync-commands.sh update
 ```
 
 ### Batch Sync Multiple Projects
 
 ```bash
 # Auto-scan and sync all projects
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh
+/path/to/speckit-sync-tool/batch-sync-all.sh
 
 # Or auto mode (no prompts)
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --auto
+/path/to/speckit-sync-tool/batch-sync-all.sh --auto
 
 # Preview cleanup across repos
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup
 
 # Apply cleanup across repos
-~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
+/path/to/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ### Using Global Commands (requires installation)
 
 ```bash
 # Available in any project directory
-cd ~/Documents/GitHub/any-project
+cd /path/to/any-project
 speckit-sync init
 speckit-sync check
 speckit-sync update
@@ -413,14 +413,14 @@ v2.1.0 (+ Templates)
 
 ```bash
 # Recommend using integrated version for all features
-ln -s ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh ~/bin/speckit-sync
+ln -s /path/to/speckit-sync-tool/sync-commands-integrated.sh ~/bin/speckit-sync
 ```
 
 ### 2. Regular Update Checks
 
 ```bash
 # Recommend running weekly
-cd ~/Documents/GitHub
+cd /path/to/workspace
 ./speckit-sync-tool/batch-sync-all.sh --check-only
 ```
 
@@ -526,7 +526,7 @@ jobs:
 
 ```bash
 # Copy Makefile template
-cp ~/Documents/GitHub/speckit-sync-tool/Makefile.template my-project/.claude/Makefile
+cp /path/to/speckit-sync-tool/Makefile.template my-project/.claude/Makefile
 
 # Use in project
 make -C .claude sync-check
@@ -539,14 +539,14 @@ make -C .claude sync-status
 ### Issue 1: spec-kit Not Found
 
 ```
-✗ Invalid spec-kit path: /Users/termtek/Documents/GitHub/spec-kit
+✗ Invalid spec-kit path: /path/to/spec-kit
 ```
 
 **Solution**:
 
 ```bash
 # Check if spec-kit exists
-ls ~/Documents/GitHub/spec-kit
+ls /path/to/spec-kit
 
 # Set correct path
 export SPECKIT_PATH=/correct/path/to/spec-kit
@@ -572,7 +572,7 @@ mkdir -p .cursor/commands
 **Solution**:
 
 ```bash
-chmod +x ~/Documents/GitHub/speckit-sync-tool/*.sh
+chmod +x /path/to/speckit-sync-tool/*.sh
 ```
 
 ### Issue 4: Outdated Configuration Version

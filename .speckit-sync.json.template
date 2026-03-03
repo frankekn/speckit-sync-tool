@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "source": {
     "type": "local",
-    "path": "/Users/termtek/Documents/GitHub/spec-kit",
+    "path": "/path/to/spec-kit",
     "version": "0.0.20"
   },
   "strategy": {
