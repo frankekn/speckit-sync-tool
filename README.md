@@ -153,6 +153,12 @@ speckit-sync update
 
 # Apply cleanup (delete/rewrite matched artifacts)
 ./sync-commands-integrated.sh cleanup --apply
+
+# Batch preview cleanup across ~/Documents/GitHub (no batch-sync-all.sh needed)
+./sync-commands-integrated.sh cleanup --all-projects
+
+# Batch apply cleanup
+./sync-commands-integrated.sh cleanup --all-projects --apply
 ```
 
 #### Dynamic Command Scanning
@@ -170,6 +176,12 @@ speckit-sync update
 
 # Apply cleanup
 ./sync-commands-integrated.sh cleanup --apply
+
+# Batch preview cleanup across repos
+./sync-commands-integrated.sh cleanup --all-projects
+
+# Batch apply cleanup across repos
+./sync-commands-integrated.sh cleanup --all-projects --apply
 ```
 
 Behavior:

@@ -93,6 +93,10 @@ cd ~/Documents/GitHub/my-project
 # 6. 反向清理（预览 / 实际执行）
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --apply
+
+# 7. 使用主脚本批量清理（无需 batch-sync-all.sh）
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --apply
 ```
 
 批量清理多个仓库：

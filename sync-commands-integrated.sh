@@ -19,7 +19,8 @@
 #   sync-commands-integrated.sh templates list          # 列出模版
 #   sync-commands-integrated.sh templates sync          # 同步模版
 #   sync-commands-integrated.sh scan                    # 掃描新命令
-#   sync-commands-integrated.sh cleanup [--apply]       # 清理 Spec-Kit 注入
+#   sync-commands-integrated.sh cleanup [--apply] [--all-projects] [--github-dir PATH]
+#                                                  # 清理 Spec-Kit 注入
 #
 # 版本：2.1.0
 # ==============================================================================
@@ -347,7 +348,13 @@ show_progress() {
 
 check_dependencies() {
     local missing=()
-    local required_cmds=("git" "jq" "diff" "grep")
+    local required_cmds=()
+
+    if [[ $# -gt 0 ]]; then
+        required_cmds=("$@")
+    else
+        required_cmds=("git" "jq" "diff" "grep")
+    fi
 
     log_debug "檢查必要工具: ${required_cmds[*]}"
 
@@ -874,6 +881,144 @@ cleanup_repo() {
     echo "  ${ICON_SUCCESS} 已改寫: $modified_count"
     echo "  ${ICON_PACKAGE} 總命中: $total_hits"
 
+    return 0
+}
+
+repo_has_speckit_artifacts() {
+    local repo_root="$1"
+    local -a cleanup_dirs=()
+    local -a standard_commands=()
+    local standard_raw=""
+    local dir
+    local cmd
+    local abs_dir
+
+    [[ -d "$repo_root" ]] || return 1
+
+    [[ -e "$repo_root/.specify" ]] && return 0
+    [[ -e "$repo_root/.speckit-sync.json" ]] && return 0
+    [[ -f "$repo_root/AGENTS.md" ]] && grep -Eq '/speckit\.|Auto-generated from all feature plans' "$repo_root/AGENTS.md" && return 0
+
+    mapfile -t cleanup_dirs < <(get_cleanup_agent_dirs)
+
+    for dir in "${cleanup_dirs[@]}"; do
+        abs_dir="$repo_root/$dir"
+        [[ -d "$abs_dir" ]] || continue
+
+        if find "$abs_dir" -type f \( -name 'speckit.*.md' -o -name 'speckit.*.toml' -o -name 'speckit.*.agent.md' -o -name 'speckit.*.prompt.md' \) | grep -q .; then
+            return 0
+        fi
+    done
+
+    if [[ -d "$SPECKIT_COMMANDS" ]]; then
+        standard_raw="$(get_standard_commands_from_speckit)"
+        read -r -a standard_commands <<< "$standard_raw"
+
+        for dir in "${cleanup_dirs[@]}"; do
+            abs_dir="$repo_root/$dir"
+            [[ -d "$abs_dir" ]] || continue
+
+            for cmd in "${standard_commands[@]}"; do
+                [[ -f "$SPECKIT_COMMANDS/$cmd" ]] || continue
+                [[ -f "$abs_dir/$cmd" ]] || continue
+                if diff -q "$SPECKIT_COMMANDS/$cmd" "$abs_dir/$cmd" >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+        done
+    fi
+
+    return 1
+}
+
+cleanup_single_project() {
+    local project_root="$1"
+    local apply_mode="$2"
+    local old_project_root="$PROJECT_ROOT"
+    local old_config_file="$CONFIG_FILE"
+    local code=0
+
+    PROJECT_ROOT="$project_root"
+    CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
+
+    if cleanup_repo "$apply_mode"; then
+        code=0
+    else
+        code=$?
+    fi
+
+    PROJECT_ROOT="$old_project_root"
+    CONFIG_FILE="$old_config_file"
+    return "$code"
+}
+
+cleanup_all_projects() {
+    local github_dir="$1"
+    local apply_mode="$2"
+    local -a projects=()
+    local project_dir
+    local project_name
+    local total=0
+    local success=0
+    local skipped=0
+    local failed=0
+    local code=0
+
+    log_header "批次清理 Spec-Kit 痕跡"
+    log_info "掃描目錄: $github_dir"
+
+    if [[ ! -d "$github_dir" ]]; then
+        log_error "目錄不存在: $github_dir"
+        return 1
+    fi
+
+    for project_dir in "$github_dir"/*; do
+        [[ -d "$project_dir" ]] || continue
+        project_name="$(basename "$project_dir")"
+        [[ "$project_name" == "spec-kit" || "$project_name" == "speckit-sync-tool" ]] && continue
+
+        if repo_has_speckit_artifacts "$project_dir"; then
+            projects+=("$project_dir")
+        fi
+    done
+
+    if [[ ${#projects[@]} -eq 0 ]]; then
+        log_info "未找到 Spec-Kit 痕跡"
+        return 10
+    fi
+
+    total=${#projects[@]}
+    echo ""
+    echo "Project list:"
+    local index=1
+    for project_dir in "${projects[@]}"; do
+        echo "  $index. $(basename "$project_dir")"
+        index=$((index + 1))
+    done
+
+    for project_dir in "${projects[@]}"; do
+        project_name="$(basename "$project_dir")"
+        log_section "Cleanup project: $project_name"
+
+        if cleanup_single_project "$project_dir" "$apply_mode"; then
+            success=$((success + 1))
+        else
+            code=$?
+            if [[ "$code" -eq 10 ]]; then
+                skipped=$((skipped + 1))
+            else
+                failed=$((failed + 1))
+            fi
+        fi
+    done
+
+    log_header "Batch Cleanup Complete"
+    echo "  ✅ Success: $success"
+    echo "  ⏭️  Skipped: $skipped"
+    echo "  ❌ Failed: $failed"
+    echo "  📦 Total: $total"
+
+    [[ "$failed" -gt 0 ]] && return 1
     return 0
 }
 
@@ -2174,7 +2319,8 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     check [options]              檢查更新狀態
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
-    cleanup [--apply]            清理 Spec-Kit 注入痕跡（預設為預覽）
+    cleanup [--apply] [--all-projects] [--github-dir PATH]
+                                 清理 Spec-Kit 注入痕跡（預設為預覽）
     update-all [options]         一鍵檢查並同步所有代理
 
     templates list               列出可用模版
@@ -2193,11 +2339,14 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     --debug                      除錯模式（顯示所有訊息和計時）
     --json                       在 update-all 時輸出 JSON 報告
     --apply                      與 cleanup 搭配，實際執行刪除/改寫
+    --all-projects               與 cleanup 搭配，掃描 GITHUB_DIR 下所有 repo
+    --github-dir <path>          與 cleanup --all-projects 搭配（預設: ~/Documents/GitHub）
     --help                       顯示此幫助訊息
 
 環境變數:
     SPECKIT_PATH                 spec-kit 倉庫路徑 (預設: ../spec-kit)
     VERBOSITY                    輸出層級: quiet|normal|verbose|debug (預設: normal)
+    GITHUB_DIR                   cleanup 批次掃描根目錄 (預設: ~/Documents/GitHub)
 
 範例:
     # 使用互動式精靈（推薦第一次使用）
@@ -2229,6 +2378,12 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
     # 套用清理
     $0 cleanup --apply
+
+    # 批次預覽清理（不用 batch-sync-all.sh）
+    $0 cleanup --all-projects
+
+    # 批次套用清理
+    $0 cleanup --all-projects --apply
 
     # 選擇並同步模版
     $0 templates select
@@ -2311,6 +2466,8 @@ main() {
     local agent=""
     local all_agents=false
     local cleanup_apply=false
+    local cleanup_all_projects_flag=false
+    local cleanup_github_dir="${GITHUB_DIR:-$HOME/Documents/GitHub}"
 
     # 解析參數
     shift || true
@@ -2348,6 +2505,14 @@ main() {
                 cleanup_apply=true
                 shift
                 ;;
+            --all-projects)
+                cleanup_all_projects_flag=true
+                shift
+                ;;
+            --github-dir)
+                cleanup_github_dir="$2"
+                shift 2
+                ;;
             --help|-h)
                 show_usage
                 exit 0
@@ -2359,8 +2524,12 @@ main() {
         esac
     done
 
-    # 檢查必要依賴（在執行任何命令前）
-    with_timing "依賴檢查" check_dependencies || exit 1
+    # cleanup 給「只拿來移除」使用者：採最小依賴，不要求 git/jq
+    if [[ "$command" == "cleanup" ]]; then
+        with_timing "依賴檢查" check_dependencies diff grep find awk || exit 1
+    else
+        with_timing "依賴檢查" check_dependencies || exit 1
+    fi
 
     case "$command" in
         wizard)
@@ -2448,7 +2617,19 @@ main() {
             CLEANUP_APPLY="$cleanup_apply"
             if [[ "$DRY_RUN" == true ]]; then
                 CLEANUP_APPLY=false
-                log_info "--dry-run 已啟用，cleanup 將以預覽模式執行" || true
+                log_info "--dry-run 已啟用，cleanup 將以預覽模式執行"
+            fi
+
+            if [[ "$cleanup_all_projects_flag" == true ]]; then
+                if cleanup_all_projects "$cleanup_github_dir" "$CLEANUP_APPLY"; then
+                    exit 0
+                else
+                    local cleanup_batch_exit=$?
+                    if [[ "$cleanup_batch_exit" -eq 10 ]]; then
+                        exit 10
+                    fi
+                    exit "$cleanup_batch_exit"
+                fi
             fi
 
             if cleanup_repo "$CLEANUP_APPLY"; then
