@@ -57,3 +57,6 @@ test-projects/
 tmp/
 temp/
 *.tmp
+
+# Local agent workspace artifacts
+.kiro/
