@@ -19,6 +19,7 @@
 #   sync-commands-integrated.sh templates list          # 列出模版
 #   sync-commands-integrated.sh templates sync          # 同步模版
 #   sync-commands-integrated.sh scan                    # 掃描新命令
+#   sync-commands-integrated.sh cleanup [--apply]       # 清理 Spec-Kit 注入
 #
 # 版本：2.1.0
 # ==============================================================================
@@ -34,6 +35,7 @@ VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
 DRY_RUN=false
 JSON_OUTPUT=false
 JSON_REPORT_PATH=""
+CLEANUP_APPLY=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(pwd)"
 CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
@@ -227,11 +229,17 @@ readonly ICON_ROCKET="🚀"
 # ==============================================================================
 
 log_info() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${BLUE}${ICON_INFO}${NC} $*"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${BLUE}${ICON_INFO}${NC} $*"
+    fi
+    return 0
 }
 
 log_success() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${GREEN}${ICON_SUCCESS}${NC} $*"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${GREEN}${ICON_SUCCESS}${NC} $*"
+    fi
+    return 0
 }
 
 log_error() {
@@ -239,7 +247,10 @@ log_error() {
 }
 
 log_warning() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${YELLOW}${ICON_WARNING}${NC} $*"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${YELLOW}${ICON_WARNING}${NC} $*"
+    fi
+    return 0
 }
 
 log_header() {
@@ -259,11 +270,17 @@ log_section() {
 }
 
 log_debug() {
-    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${GRAY}[DEBUG]${NC} $*" >&2
+    if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
+        echo -e "${GRAY}[DEBUG]${NC} $*" >&2
+    fi
+    return 0
 }
 
 log_verbose() {
-    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${GRAY}$*${NC}"
+    if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
+        echo -e "${GRAY}$*${NC}"
+    fi
+    return 0
 }
 
 # 計時包裝器（僅在 verbose/debug 模式顯示）
@@ -594,6 +611,270 @@ scan_new_commands() {
     else
         log_info "已跳過新命令添加"
     fi
+}
+
+# ==============================================================================
+# Spec-Kit 反向清理
+# ==============================================================================
+
+get_cleanup_agent_dirs() {
+    local -a dirs=()
+    local agent
+    local candidate
+
+    for agent in "${!AGENTS[@]}"; do
+        while IFS= read -r candidate; do
+            [[ -z "$candidate" ]] && continue
+            dirs+=("$candidate")
+        done < <(get_agent_dir_candidates "$agent")
+    done
+
+    # 官方 spec-kit 額外路徑（本工具映射之外）
+    dirs+=(
+        ".github/agents"
+        ".qoder/commands"
+        ".shai/commands"
+        ".agent/workflows"
+        ".bob/commands"
+        ".speckit/commands"
+        ".kilocode/workflows"
+    )
+
+    printf '%s\n' "${dirs[@]}" | awk 'NF && !seen[$0]++'
+}
+
+remove_path_safely() {
+    local path="$1"
+
+    [[ -e "$path" ]] || return 0
+
+    if command -v trash >/dev/null 2>&1; then
+        trash "$path"
+    else
+        log_warning "找不到 trash，改用 rm -rf: $path"
+        rm -rf "$path"
+    fi
+}
+
+sanitize_agents_md() {
+    local input_file="$1"
+    local output_file="$2"
+
+    awk '
+        BEGIN {
+            skip_section = 0
+            blank = 0
+        }
+        {
+            line = $0
+
+            if (skip_section == 1) {
+                if (line ~ /^## / || line ~ /^<!-- MANUAL ADDITIONS (START|END) -->$/) {
+                    skip_section = 0
+                } else {
+                    next
+                }
+            }
+
+            if (line ~ /\/speckit\./) next
+            if (line ~ /^Auto-generated from all feature plans/) next
+            if (line ~ /^# .*Development Guidelines$/) next
+            if (line ~ /^<!-- MANUAL ADDITIONS START -->$/) next
+            if (line ~ /^<!-- MANUAL ADDITIONS END -->$/) next
+
+            if (line ~ /^## (Active Technologies|Project Structure|Commands|Code Style|Recent Changes)$/) {
+                skip_section = 1
+                next
+            }
+
+            if (line ~ /^[[:space:]]*$/) {
+                if (blank == 1) next
+                blank = 1
+                print ""
+                next
+            }
+
+            blank = 0
+            print line
+        }
+    ' "$input_file" > "$output_file"
+}
+
+prune_empty_agent_dirs() {
+    local -a cleanup_dirs=("$@")
+    local rel_dir
+    local abs_dir
+    local current
+
+    for rel_dir in "${cleanup_dirs[@]}"; do
+        abs_dir="$PROJECT_ROOT/$rel_dir"
+        current="$abs_dir"
+
+        while [[ "$current" != "$PROJECT_ROOT" ]] && [[ "$current" == "$PROJECT_ROOT/"* ]]; do
+            if [[ -d "$current" ]] && [[ -z "$(find "$current" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
+                remove_path_safely "$current"
+                current="$(dirname "$current")"
+            else
+                break
+            fi
+        done
+    done
+}
+
+cleanup_repo() {
+    local apply_mode="$1"
+
+    log_header "清理 Spec-Kit 痕跡"
+    log_info "模式: $([ "$apply_mode" == "true" ] && echo "套用 (--apply)" || echo "預覽")"
+
+    local -a standard_commands=()
+    local -a cleanup_dirs=()
+    local cmd
+    local dir
+    local file
+    local source
+    local target
+
+    local standard_raw=""
+    if [[ -d "$SPECKIT_COMMANDS" ]]; then
+        standard_raw="$(get_standard_commands_from_speckit)"
+        read -r -a standard_commands <<< "$standard_raw"
+    else
+        log_warning "找不到 $SPECKIT_COMMANDS，將略過模板精準比對"
+    fi
+
+    mapfile -t cleanup_dirs < <(get_cleanup_agent_dirs)
+
+    local -a delete_targets=()
+    local -a delete_reasons=()
+    declare -A seen_targets=()
+
+    add_delete_target() {
+        local path="$1"
+        local reason="$2"
+        if [[ -n "${seen_targets[$path]+x}" ]]; then
+            return
+        fi
+        seen_targets["$path"]=1
+        delete_targets+=("$path")
+        delete_reasons+=("$reason")
+    }
+
+    # 1) speckit 命名的命令檔
+    for dir in "${cleanup_dirs[@]}"; do
+        local abs_dir="$PROJECT_ROOT/$dir"
+        [[ -d "$abs_dir" ]] || continue
+
+        while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            add_delete_target "$file" "speckit_named"
+        done < <(find "$abs_dir" -type f \
+            \( -name 'speckit.*.md' -o -name 'speckit.*.toml' -o -name 'speckit.*.agent.md' -o -name 'speckit.*.prompt.md' \) 2>/dev/null)
+    done
+
+    # 2) 與官方模板完全一致的標準命令檔
+    if [[ ${#standard_commands[@]} -gt 0 ]] && [[ -d "$SPECKIT_COMMANDS" ]]; then
+        for dir in "${cleanup_dirs[@]}"; do
+            local abs_dir="$PROJECT_ROOT/$dir"
+            [[ -d "$abs_dir" ]] || continue
+
+            for cmd in "${standard_commands[@]}"; do
+                source="$SPECKIT_COMMANDS/$cmd"
+                target="$abs_dir/$cmd"
+                [[ -f "$source" ]] || continue
+                [[ -f "$target" ]] || continue
+
+                if diff -q "$source" "$target" >/dev/null 2>&1; then
+                    add_delete_target "$target" "template_match:$cmd"
+                fi
+            done
+        done
+    fi
+
+    # 3) 固定路徑（.specify / config）
+    [[ -e "$PROJECT_ROOT/.specify" ]] && add_delete_target "$PROJECT_ROOT/.specify" ".specify_dir"
+    [[ -e "$PROJECT_ROOT/.speckit-sync.json" ]] && add_delete_target "$PROJECT_ROOT/.speckit-sync.json" "sync_config"
+    while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        add_delete_target "$file" "sync_config_backup"
+    done < <(find "$PROJECT_ROOT" -maxdepth 1 -type f -name '.speckit-sync.json.backup.*' 2>/dev/null)
+
+    # 4) AGENTS.md 就地清理（只在命中特徵時處理）
+    local agents_file="$PROJECT_ROOT/AGENTS.md"
+    local agents_action="none"
+    local agents_tmp=""
+    if [[ -f "$agents_file" ]] && grep -Eq '/speckit\.|Auto-generated from all feature plans' "$agents_file"; then
+        agents_tmp="$(mktemp)"
+        sanitize_agents_md "$agents_file" "$agents_tmp"
+
+        if ! diff -q "$agents_file" "$agents_tmp" >/dev/null 2>&1; then
+            if grep -q '[^[:space:]]' "$agents_tmp"; then
+                agents_action="rewrite"
+            else
+                agents_action="delete"
+            fi
+        fi
+    fi
+
+    local total_hits="${#delete_targets[@]}"
+    [[ "$agents_action" != "none" ]] && total_hits=$((total_hits + 1))
+
+    if [[ "$total_hits" -eq 0 ]]; then
+        log_info "未發現 Spec-Kit 痕跡"
+        [[ -n "$agents_tmp" ]] && rm -f "$agents_tmp"
+        return 10
+    fi
+
+    echo ""
+    log_section "命中項目"
+    local i
+    for i in "${!delete_targets[@]}"; do
+        if [[ "$apply_mode" == "true" ]]; then
+            echo "  - 刪除: ${delete_targets[$i]} (${delete_reasons[$i]})"
+        else
+            echo "  - 將刪除: ${delete_targets[$i]} (${delete_reasons[$i]})"
+        fi
+    done
+
+    if [[ "$agents_action" == "rewrite" ]]; then
+        echo "  - $([ "$apply_mode" == "true" ] && echo "改寫" || echo "將改寫"): $agents_file (移除 Spec-Kit 區塊)"
+    elif [[ "$agents_action" == "delete" ]]; then
+        echo "  - $([ "$apply_mode" == "true" ] && echo "刪除" || echo "將刪除"): $agents_file (清理後為空)"
+    fi
+
+    if [[ "$apply_mode" != "true" ]]; then
+        echo ""
+        log_info "預覽完成。若要實際清理，請加上 --apply。"
+        [[ -n "$agents_tmp" ]] && rm -f "$agents_tmp"
+        return 0
+    fi
+
+    # 實際執行
+    local deleted_count=0
+    for i in "${!delete_targets[@]}"; do
+        remove_path_safely "${delete_targets[$i]}"
+        deleted_count=$((deleted_count + 1))
+    done
+
+    local modified_count=0
+    if [[ "$agents_action" == "rewrite" ]]; then
+        cp "$agents_tmp" "$agents_file"
+        modified_count=1
+    elif [[ "$agents_action" == "delete" ]]; then
+        remove_path_safely "$agents_file"
+        deleted_count=$((deleted_count + 1))
+    fi
+    [[ -n "$agents_tmp" ]] && rm -f "$agents_tmp"
+
+    prune_empty_agent_dirs "${cleanup_dirs[@]}"
+
+    echo ""
+    log_header "清理完成"
+    echo "  ${ICON_SUCCESS} 已刪除: $deleted_count"
+    echo "  ${ICON_SUCCESS} 已改寫: $modified_count"
+    echo "  ${ICON_PACKAGE} 總命中: $total_hits"
+
+    return 0
 }
 
 # ==============================================================================
@@ -1893,6 +2174,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     check [options]              檢查更新狀態
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
+    cleanup [--apply]            清理 Spec-Kit 注入痕跡（預設為預覽）
     update-all [options]         一鍵檢查並同步所有代理
 
     templates list               列出可用模版
@@ -1910,6 +2192,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     --verbose, -v                詳細模式（顯示額外資訊）
     --debug                      除錯模式（顯示所有訊息和計時）
     --json                       在 update-all 時輸出 JSON 報告
+    --apply                      與 cleanup 搭配，實際執行刪除/改寫
     --help                       顯示此幫助訊息
 
 環境變數:
@@ -1940,6 +2223,12 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
     # 掃描新命令
     $0 scan
+
+    # 預覽清理 Spec-Kit 痕跡
+    $0 cleanup
+
+    # 套用清理
+    $0 cleanup --apply
 
     # 選擇並同步模版
     $0 templates select
@@ -2021,6 +2310,7 @@ main() {
     local subcommand="${2:-}"
     local agent=""
     local all_agents=false
+    local cleanup_apply=false
 
     # 解析參數
     shift || true
@@ -2052,6 +2342,10 @@ main() {
                 ;;
             --json)
                 JSON_OUTPUT=true
+                shift
+                ;;
+            --apply)
+                cleanup_apply=true
                 shift
                 ;;
             --help|-h)
@@ -2148,6 +2442,23 @@ main() {
             else
                 log_error "請指定代理: --agent <name>"
                 exit 1
+            fi
+            ;;
+        cleanup)
+            CLEANUP_APPLY="$cleanup_apply"
+            if [[ "$DRY_RUN" == true ]]; then
+                CLEANUP_APPLY=false
+                log_info "--dry-run 已啟用，cleanup 將以預覽模式執行" || true
+            fi
+
+            if cleanup_repo "$CLEANUP_APPLY"; then
+                exit 0
+            else
+                local cleanup_exit=$?
+                if [[ "$cleanup_exit" -eq 10 ]]; then
+                    exit 10
+                fi
+                exit "$cleanup_exit"
             fi
             ;;
         rollback)

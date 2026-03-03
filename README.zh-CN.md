@@ -89,6 +89,20 @@ cd ~/Documents/GitHub/my-project
 # 5. 选择并同步模板（可选）
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates select
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh templates sync
+
+# 6. 反向清理（预览 / 实际执行）
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --apply
+```
+
+批量清理多个仓库：
+
+```bash
+# 预览
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+
+# 实际执行
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ## 📚 完整文档

@@ -96,6 +96,12 @@ cd ~/Documents/GitHub/my-project
 
 # 或自動模式（不詢問）
 ~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --auto
+
+# 預覽清理所有 repo 的 Spec-Kit 痕跡
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+
+# 實際清理所有 repo
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ### 使用全局命令（需先安裝）
@@ -137,6 +143,12 @@ speckit-sync update
 
 # 顯示配置狀態
 ./sync-commands-integrated.sh status
+
+# 預覽清理目前 repo 的 Spec-Kit 痕跡
+./sync-commands-integrated.sh cleanup
+
+# 實際清理（刪除/改寫命中項）
+./sync-commands-integrated.sh cleanup --apply
 ```
 
 #### 動態命令掃描
@@ -145,6 +157,21 @@ speckit-sync update
 # 掃描並添加新命令（需指定代理）
 ./sync-commands-integrated.sh scan --agent claude
 ```
+
+#### 反向清理（移除 Spec-Kit 痕跡）
+
+```bash
+# 僅預覽（預設）
+./sync-commands-integrated.sh cleanup
+
+# 實際清理
+./sync-commands-integrated.sh cleanup --apply
+```
+
+行為：
+- 刪除偵測到的 spec-kit 痕跡（例如 `.specify/`、`speckit.*` 命令檔、與官方模板完全一致的已同步命令）
+- 若偵測到 Spec-Kit 注入段落，會就地清理 `AGENTS.md`
+- 刪除 `.speckit-sync.json` 與 `.speckit-sync.json.backup.*`
 
 #### 模版管理
 

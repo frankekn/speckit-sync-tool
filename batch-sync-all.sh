@@ -6,6 +6,8 @@
 #   ./batch-sync-all.sh                    # Interactive mode
 #   ./batch-sync-all.sh --auto             # Auto mode (no prompts)
 #   ./batch-sync-all.sh --check-only       # Check only, no updates
+#   ./batch-sync-all.sh --cleanup          # Preview cleanup across repos
+#   ./batch-sync-all.sh --cleanup --apply  # Apply cleanup across repos
 #
 
 set -e
@@ -45,15 +47,24 @@ NC='\033[0m' # No Color
 # ============================================================================
 
 log_info() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${BLUE}ℹ${NC} $1"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${BLUE}ℹ${NC} $1"
+    fi
+    return 0
 }
 
 log_success() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${GREEN}✓${NC} $1"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${GREEN}✓${NC} $1"
+    fi
+    return 0
 }
 
 log_warning() {
-    [[ "$VERBOSITY" != "quiet" ]] && echo -e "${YELLOW}⚠${NC} $1"
+    if [[ "$VERBOSITY" != "quiet" ]]; then
+        echo -e "${YELLOW}⚠${NC} $1"
+    fi
+    return 0
 }
 
 log_error() {
@@ -78,11 +89,17 @@ log_section() {
 }
 
 log_debug() {
-    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${CYAN}[DEBUG]${NC} $1" >&2
+    if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
+        echo -e "${CYAN}[DEBUG]${NC} $1" >&2
+    fi
+    return 0
 }
 
 log_verbose() {
-    [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]] && echo -e "${CYAN}$1${NC}"
+    if [[ "$VERBOSITY" =~ ^(debug|verbose)$ ]]; then
+        echo -e "${CYAN}$1${NC}"
+    fi
+    return 0
 }
 
 # ============================================================================
@@ -140,6 +157,80 @@ scan_projects() {
         done
 
         if [ "$has_agent" = true ]; then
+            found_projects+=("$project_name")
+        fi
+    done
+
+    echo "${found_projects[@]}"
+}
+
+repo_has_speckit_artifacts() {
+    local repo_dir="$1"
+    local agent_dirs=(
+        ".claude/commands"
+        ".github/prompts"
+        ".github/agents"
+        ".gemini/commands"
+        ".cursor/rules"
+        ".cursor/commands"
+        ".qwen/commands"
+        ".opencode/command"
+        ".opencode/commands"
+        ".codex/prompts"
+        ".codex/commands"
+        ".windsurf/workflows"
+        ".kilocode/workflows"
+        ".kilocode/rules"
+        ".augment/rules"
+        ".augment/commands"
+        ".codebuddy/commands"
+        ".roo/rules"
+        ".roo/rules-mode-writer"
+        ".roo/commands"
+        ".qoder/commands"
+        ".amazonq/prompts"
+        ".amazonq/commands"
+        ".agents/commands"
+        ".agent/workflows"
+        ".bob/commands"
+        ".factory/commands"
+        ".factory/prompts"
+        ".speckit/commands"
+        ".shai/commands"
+    )
+
+    [[ -e "$repo_dir/.specify" ]] && return 0
+    [[ -e "$repo_dir/.speckit-sync.json" ]] && return 0
+
+    if [[ -f "$repo_dir/AGENTS.md" ]] && grep -Eq '/speckit\.|Auto-generated from all feature plans' "$repo_dir/AGENTS.md"; then
+        return 0
+    fi
+
+    local agent_dir
+    for agent_dir in "${agent_dirs[@]}"; do
+        if [[ -d "$repo_dir/$agent_dir" ]] && find "$repo_dir/$agent_dir" -type f -name 'speckit.*' | grep -q .; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+scan_projects_for_cleanup() {
+    local found_projects=()
+    local dir
+
+    for dir in "$GITHUB_DIR"/*; do
+        [ -d "$dir" ] || continue
+
+        local project_name
+        project_name=$(basename "$dir")
+
+        if [ "$project_name" = "spec-kit" ] || [ "$project_name" = "speckit-sync-tool" ]; then
+            continue
+        fi
+
+        if repo_has_speckit_artifacts "$dir"; then
             found_projects+=("$project_name")
         fi
     done
@@ -399,8 +490,11 @@ batch_sync() {
     # Process each project
     for project in "${PROJECTS[@]}"; do
         local exit_code
-        process_project "$project" "$mode"
-        exit_code=$?
+        if process_project "$project" "$mode"; then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
 
         case $exit_code in
             0)  # 成功
@@ -417,6 +511,86 @@ batch_sync() {
 
     # Show summary
     log_header "Batch Sync Complete"
+    echo ""
+    echo "📊 Statistics:"
+    echo "  ✅ Success: $success project(s)"
+    echo "  ⏭️  Skipped: $skipped project(s)"
+    echo "  ❌ Failed: $failed project(s)"
+    echo "  ═══════════════"
+    echo "  📦 Total: $total project(s)"
+}
+
+process_project_cleanup() {
+    local project_name="$1"
+    local apply_mode="${2:-false}"
+    local project_dir="$GITHUB_DIR/$project_name"
+
+    log_section "Cleanup project: $project_name"
+    cd "$project_dir" || return 2
+
+    local -a cmd=( "$SYNC_TOOL" cleanup )
+    if [[ "$apply_mode" == "true" ]]; then
+        cmd+=( --apply )
+    fi
+
+    if SPECKIT_PATH="$SPECKIT_PATH" VERBOSITY="$VERBOSITY" "${cmd[@]}"; then
+        return 0
+    fi
+
+    local exit_code=$?
+    if [[ "$exit_code" -eq 10 ]]; then
+        log_info "No Spec-Kit artifacts found"
+        return 1
+    fi
+
+    log_error "Cleanup failed for $project_name"
+    return 2
+}
+
+batch_cleanup() {
+    local apply_mode="${1:-false}"
+
+    log_header "Batch Cleanup Spec-Kit Artifacts"
+    echo ""
+    log_info "Scanning for projects in $GITHUB_DIR..."
+    PROJECTS=($(scan_projects_for_cleanup))
+
+    if [ ${#PROJECTS[@]} -eq 0 ]; then
+        log_info "No projects with Spec-Kit artifacts found"
+        return 0
+    fi
+
+    log_success "Found ${#PROJECTS[@]} project(s) with Spec-Kit artifacts"
+    echo ""
+    echo "Project list:"
+    local index=1
+    local project
+    for project in "${PROJECTS[@]}"; do
+        echo "  $index. $project"
+        index=$((index + 1))
+    done
+
+    local total=${#PROJECTS[@]}
+    local success=0
+    local skipped=0
+    local failed=0
+
+    for project in "${PROJECTS[@]}"; do
+        local exit_code
+        if process_project_cleanup "$project" "$apply_mode"; then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
+
+        case $exit_code in
+            0) success=$((success + 1)) ;;
+            1) skipped=$((skipped + 1)) ;;
+            *) failed=$((failed + 1)) ;;
+        esac
+    done
+
+    log_header "Batch Cleanup Complete"
     echo ""
     echo "📊 Statistics:"
     echo "  ✅ Success: $success project(s)"
@@ -454,6 +628,8 @@ Options:
     --auto              Auto mode (no prompts, auto-update)
     --check-only        Check only, no updates
     --one-click         Run update-all for each project (one command)
+    --cleanup           Scan repos and run cleanup preview
+    --apply             With --cleanup, apply cleanup changes
     --quiet, -q         Quiet mode (errors only)
     --verbose, -v       Verbose mode (detailed output)
     --debug             Debug mode (all messages with timing)
@@ -474,6 +650,12 @@ Examples:
     # Check-only mode (show status, no updates)
     $0 --check-only
 
+    # Preview cleanup across repos
+    $0 --cleanup
+
+    # Apply cleanup across repos
+    $0 --cleanup --apply
+
     # Custom GitHub directory
     GITHUB_DIR=/custom/path $0
 
@@ -491,20 +673,46 @@ EOF
 
 main() {
     local mode="interactive"
+    local cleanup_mode=false
+    local cleanup_apply=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --auto)
+                if [[ "$cleanup_mode" == true ]]; then
+                    log_error "--auto 不能和 --cleanup 同時使用"
+                    exit 1
+                fi
                 mode="auto"
                 shift
                 ;;
             --check-only)
+                if [[ "$cleanup_mode" == true ]]; then
+                    log_error "--check-only 不能和 --cleanup 同時使用"
+                    exit 1
+                fi
                 mode="check-only"
                 shift
                 ;;
             --one-click)
+                if [[ "$cleanup_mode" == true ]]; then
+                    log_error "--one-click 不能和 --cleanup 同時使用"
+                    exit 1
+                fi
                 mode="one-click"
+                shift
+                ;;
+            --cleanup)
+                if [[ "$mode" != "interactive" ]]; then
+                    log_error "--cleanup 不能和 --auto/--check-only/--one-click 同時使用"
+                    exit 1
+                fi
+                cleanup_mode=true
+                shift
+                ;;
+            --apply)
+                cleanup_apply=true
                 shift
                 ;;
             --quiet|-q)
@@ -545,8 +753,15 @@ main() {
         exit 1
     fi
 
-    # Execute batch sync
-    batch_sync "$mode"
+    if [[ "$cleanup_mode" == true ]]; then
+        batch_cleanup "$cleanup_apply"
+    else
+        if [[ "$cleanup_apply" == true ]]; then
+            log_error "--apply 只能和 --cleanup 一起使用"
+            exit 1
+        fi
+        batch_sync "$mode"
+    fi
 }
 
 main "$@"

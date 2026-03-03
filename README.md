@@ -100,6 +100,12 @@ cd ~/Documents/GitHub/my-project
 
 # Or auto mode (no prompts)
 ~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --auto
+
+# Preview cleanup across repos
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup
+
+# Apply cleanup across repos
+~/Documents/GitHub/speckit-sync-tool/batch-sync-all.sh --cleanup --apply
 ```
 
 ### Using Global Commands (requires installation)
@@ -141,6 +147,12 @@ speckit-sync update
 
 # Display configuration status
 ./sync-commands-integrated.sh status
+
+# Preview cleanup of spec-kit artifacts in current repo
+./sync-commands-integrated.sh cleanup
+
+# Apply cleanup (delete/rewrite matched artifacts)
+./sync-commands-integrated.sh cleanup --apply
 ```
 
 #### Dynamic Command Scanning
@@ -149,6 +161,21 @@ speckit-sync update
 # Scan and add new commands (requires agent)
 ./sync-commands-integrated.sh scan --agent claude
 ```
+
+#### Reverse Cleanup (Remove Spec-Kit Artifacts)
+
+```bash
+# Preview only (default)
+./sync-commands-integrated.sh cleanup
+
+# Apply cleanup
+./sync-commands-integrated.sh cleanup --apply
+```
+
+Behavior:
+- Removes detected spec-kit artifacts (for example `.specify/`, `speckit.*` command files, matched synced command templates)
+- Cleans `AGENTS.md` in place when spec-kit injected blocks are detected
+- Removes `.speckit-sync.json` and `.speckit-sync.json.backup.*`
 
 #### Template Management
 
