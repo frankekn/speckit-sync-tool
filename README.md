@@ -148,17 +148,20 @@ speckit-sync update
 # Display configuration status
 ./sync-commands-integrated.sh status
 
+# Run against a specific project path (no cd required)
+./sync-commands-integrated.sh status --project-root /path/to/project
+
 # Preview cleanup of spec-kit artifacts in current repo
 ./sync-commands-integrated.sh cleanup
 
 # Apply cleanup (delete/rewrite matched artifacts)
 ./sync-commands-integrated.sh cleanup --apply
 
-# Batch preview cleanup across ~/Documents/GitHub (no batch-sync-all.sh needed)
-./sync-commands-integrated.sh cleanup --all-projects
+# Batch preview cleanup across a custom workspace (no batch-sync-all.sh needed)
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
 
 # Batch apply cleanup
-./sync-commands-integrated.sh cleanup --all-projects --apply
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 #### Dynamic Command Scanning
@@ -178,10 +181,10 @@ speckit-sync update
 ./sync-commands-integrated.sh cleanup --apply
 
 # Batch preview cleanup across repos
-./sync-commands-integrated.sh cleanup --all-projects
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
 
 # Batch apply cleanup across repos
-./sync-commands-integrated.sh cleanup --all-projects --apply
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 Behavior:

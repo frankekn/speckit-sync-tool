@@ -94,9 +94,12 @@ cd ~/Documents/GitHub/my-project
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup
 ~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --apply
 
-# 7. 使用主脚本批量清理（无需 batch-sync-all.sh）
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects
-~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --apply
+# 7. 指定项目路径执行（无需先 cd）
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh status --project-root /path/to/project
+
+# 8. 使用主脚本批量清理（无需 batch-sync-all.sh）
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
+~/Documents/GitHub/speckit-sync-tool/sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 批量清理多个仓库：

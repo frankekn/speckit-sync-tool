@@ -144,17 +144,20 @@ speckit-sync update
 # 顯示配置狀態
 ./sync-commands-integrated.sh status
 
+# 指定專案路徑執行（不需要先 cd）
+./sync-commands-integrated.sh status --project-root /path/to/project
+
 # 預覽清理目前 repo 的 Spec-Kit 痕跡
 ./sync-commands-integrated.sh cleanup
 
 # 實際清理（刪除/改寫命中項）
 ./sync-commands-integrated.sh cleanup --apply
 
-# 批次預覽清理 ~/Documents/GitHub（不需 batch-sync-all.sh）
-./sync-commands-integrated.sh cleanup --all-projects
+# 批次預覽清理自訂 workspace（不需 batch-sync-all.sh）
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
 
 # 批次實際清理
-./sync-commands-integrated.sh cleanup --all-projects --apply
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 #### 動態命令掃描
@@ -174,10 +177,10 @@ speckit-sync update
 ./sync-commands-integrated.sh cleanup --apply
 
 # 批次預覽清理多個 repo
-./sync-commands-integrated.sh cleanup --all-projects
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace
 
 # 批次實際清理多個 repo
-./sync-commands-integrated.sh cleanup --all-projects --apply
+./sync-commands-integrated.sh cleanup --all-projects --workspace-dir /path/to/workspace --apply
 ```
 
 行為：

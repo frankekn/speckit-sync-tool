@@ -19,7 +19,7 @@
 #   sync-commands-integrated.sh templates list          # 列出模版
 #   sync-commands-integrated.sh templates sync          # 同步模版
 #   sync-commands-integrated.sh scan                    # 掃描新命令
-#   sync-commands-integrated.sh cleanup [--apply] [--all-projects] [--github-dir PATH]
+#   sync-commands-integrated.sh cleanup [--apply] [--all-projects] [--workspace-dir PATH]
 #                                                  # 清理 Spec-Kit 注入
 #
 # 版本：2.1.0
@@ -953,7 +953,7 @@ cleanup_single_project() {
 }
 
 cleanup_all_projects() {
-    local github_dir="$1"
+    local workspace_dir="$1"
     local apply_mode="$2"
     local -a projects=()
     local project_dir
@@ -965,14 +965,14 @@ cleanup_all_projects() {
     local code=0
 
     log_header "批次清理 Spec-Kit 痕跡"
-    log_info "掃描目錄: $github_dir"
+    log_info "掃描目錄: $workspace_dir"
 
-    if [[ ! -d "$github_dir" ]]; then
-        log_error "目錄不存在: $github_dir"
+    if [[ ! -d "$workspace_dir" ]]; then
+        log_error "目錄不存在: $workspace_dir"
         return 1
     fi
 
-    for project_dir in "$github_dir"/*; do
+    for project_dir in "$workspace_dir"/*; do
         [[ -d "$project_dir" ]] || continue
         project_name="$(basename "$project_dir")"
         [[ "$project_name" == "spec-kit" || "$project_name" == "speckit-sync-tool" ]] && continue
@@ -2319,7 +2319,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     check [options]              檢查更新狀態
     update [options]             執行命令同步
     scan [--agent <name>]        掃描並添加新命令
-    cleanup [--apply] [--all-projects] [--github-dir PATH]
+    cleanup [--apply] [--all-projects] [--workspace-dir PATH]
                                  清理 Spec-Kit 注入痕跡（預設為預覽）
     update-all [options]         一鍵檢查並同步所有代理
 
@@ -2332,6 +2332,8 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 
 選項:
     --agent <name>               指定要操作的代理
+    --project-root <path>        指定目標專案路徑（預設: 當前目錄）
+    --path <path>                --project-root 縮寫
     --all-agents                 自動偵測並處理所有代理（忽略配置檔啟用狀態）
     --dry-run, -n                預覽模式（顯示將執行的操作但不實際執行）
     --quiet, -q                  安靜模式（僅顯示錯誤）
@@ -2339,14 +2341,16 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     --debug                      除錯模式（顯示所有訊息和計時）
     --json                       在 update-all 時輸出 JSON 報告
     --apply                      與 cleanup 搭配，實際執行刪除/改寫
-    --all-projects               與 cleanup 搭配，掃描 GITHUB_DIR 下所有 repo
-    --github-dir <path>          與 cleanup --all-projects 搭配（預設: ~/Documents/GitHub）
+    --all-projects               與 cleanup 搭配，掃描 workspace 下所有 repo
+    --workspace-dir <path>       與 cleanup --all-projects 搭配（推薦）
+    --github-dir <path>          --workspace-dir 相容別名
     --help                       顯示此幫助訊息
 
 環境變數:
     SPECKIT_PATH                 spec-kit 倉庫路徑 (預設: ../spec-kit)
     VERBOSITY                    輸出層級: quiet|normal|verbose|debug (預設: normal)
-    GITHUB_DIR                   cleanup 批次掃描根目錄 (預設: ~/Documents/GitHub)
+    WORKSPACE_DIR                cleanup 批次掃描根目錄 (預設: ~/Documents/GitHub)
+    GITHUB_DIR                   WORKSPACE_DIR 的相容別名
 
 範例:
     # 使用互動式精靈（推薦第一次使用）
@@ -2379,11 +2383,14 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
     # 套用清理
     $0 cleanup --apply
 
+    # 指定單一專案路徑（不需先 cd）
+    $0 status --project-root /path/to/my-project
+
     # 批次預覽清理（不用 batch-sync-all.sh）
-    $0 cleanup --all-projects
+    $0 cleanup --all-projects --workspace-dir /path/to/workspace
 
     # 批次套用清理
-    $0 cleanup --all-projects --apply
+    $0 cleanup --all-projects --workspace-dir /path/to/workspace --apply
 
     # 選擇並同步模版
     $0 templates select
@@ -2467,7 +2474,8 @@ main() {
     local all_agents=false
     local cleanup_apply=false
     local cleanup_all_projects_flag=false
-    local cleanup_github_dir="${GITHUB_DIR:-$HOME/Documents/GitHub}"
+    local cleanup_workspace_dir="${WORKSPACE_DIR:-${GITHUB_DIR:-$HOME/Documents/GitHub}}"
+    local project_root_override=""
 
     # 解析參數
     shift || true
@@ -2475,6 +2483,10 @@ main() {
         case "$1" in
             --agent)
                 agent="$2"
+                shift 2
+                ;;
+            --project-root|--path)
+                project_root_override="$2"
                 shift 2
                 ;;
             --all-agents)
@@ -2509,8 +2521,12 @@ main() {
                 cleanup_all_projects_flag=true
                 shift
                 ;;
+            --workspace-dir)
+                cleanup_workspace_dir="$2"
+                shift 2
+                ;;
             --github-dir)
-                cleanup_github_dir="$2"
+                cleanup_workspace_dir="$2"
                 shift 2
                 ;;
             --help|-h)
@@ -2523,6 +2539,16 @@ main() {
                 ;;
         esac
     done
+
+    if [[ -n "$project_root_override" ]]; then
+        if [[ ! -d "$project_root_override" ]]; then
+            log_error "專案路徑不存在: $project_root_override"
+            exit 1
+        fi
+        PROJECT_ROOT="$(cd "$project_root_override" && pwd)"
+        CONFIG_FILE="$PROJECT_ROOT/.speckit-sync.json"
+        log_info "使用專案路徑: $PROJECT_ROOT"
+    fi
 
     # cleanup 給「只拿來移除」使用者：採最小依賴，不要求 git/jq
     if [[ "$command" == "cleanup" ]]; then
@@ -2621,7 +2647,7 @@ main() {
             fi
 
             if [[ "$cleanup_all_projects_flag" == true ]]; then
-                if cleanup_all_projects "$cleanup_github_dir" "$CLEANUP_APPLY"; then
+                if cleanup_all_projects "$cleanup_workspace_dir" "$CLEANUP_APPLY"; then
                     exit 0
                 else
                     local cleanup_batch_exit=$?
