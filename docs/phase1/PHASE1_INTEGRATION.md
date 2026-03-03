@@ -232,7 +232,7 @@ grep '"version"' .claude/.speckit-sync.json
 
 ```bash
 # 1. 在 spec-kit 中創建測試命令
-echo "# Test Command" > ~/Documents/GitHub/spec-kit/templates/commands/test-new.md
+echo "# Test Command" > /path/to/spec-kit/templates/commands/test-new.md
 
 # 2. 執行掃描
 ./sync-commands.sh scan
@@ -244,7 +244,7 @@ echo "# Test Command" > ~/Documents/GitHub/spec-kit/templates/commands/test-new.
 grep "test-new.md" .claude/.speckit-sync.json
 
 # 4. 清理測試
-rm ~/Documents/GitHub/spec-kit/templates/commands/test-new.md
+rm /path/to/spec-kit/templates/commands/test-new.md
 ```
 
 ### 5. 完整流程測試
@@ -270,7 +270,7 @@ $ ./sync-commands.sh list
 📋 Spec-Kit 可用命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 來源路徑: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 來源路徑: /path/to/spec-kit/templates/commands
 
 ℹ 找到 8 個命令：
 
@@ -295,7 +295,7 @@ $ ./sync-commands.sh list --verbose
 📋 Spec-Kit 可用命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 來源路徑: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 來源路徑: /path/to/spec-kit/templates/commands
 
 ℹ 找到 8 個命令：
 
@@ -320,8 +320,8 @@ $ ./sync-commands.sh scan
 🔍 掃描 Spec-Kit 新命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 Spec-Kit 路徑: /Users/termtek/Documents/GitHub/spec-kit
-📁 命令目錄: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 Spec-Kit 路徑: /path/to/spec-kit
+📁 命令目錄: /path/to/spec-kit/templates/commands
 
 ℹ 找到 10 個 Spec-Kit 命令
 ℹ 配置檔案中已知 8 個命令

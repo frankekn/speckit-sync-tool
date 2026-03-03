@@ -27,7 +27,7 @@ $ ./sync-commands.sh list
 📋 Spec-Kit 可用命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 來源路徑: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 來源路徑: /path/to/spec-kit/templates/commands
 
 ℹ 找到 8 個命令：
 
@@ -55,7 +55,7 @@ $ ./sync-commands.sh list --verbose
 📋 Spec-Kit 可用命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 來源路徑: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 來源路徑: /path/to/spec-kit/templates/commands
 
 ℹ 找到 8 個命令：
 
@@ -121,7 +121,7 @@ $ /path/to/sync-commands.sh init
   "version": "1.1.0",
   "source": {
     "type": "local",
-    "path": "/Users/termtek/Documents/GitHub/spec-kit",
+    "path": "/path/to/spec-kit",
     "version": "0.0.20"
   },
   "known_commands": [
@@ -183,8 +183,8 @@ $ ./sync-commands.sh scan
 🔍 掃描 Spec-Kit 新命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 Spec-Kit 路徑: /Users/termtek/Documents/GitHub/spec-kit
-📁 命令目錄: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 Spec-Kit 路徑: /path/to/spec-kit
+📁 命令目錄: /path/to/spec-kit/templates/commands
 
 ℹ 找到 10 個 Spec-Kit 命令
 ℹ 配置檔案中已知 8 個命令
@@ -212,8 +212,8 @@ $ ./sync-commands.sh scan
 🔍 掃描 Spec-Kit 新命令
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 Spec-Kit 路徑: /Users/termtek/Documents/GitHub/spec-kit
-📁 命令目錄: /Users/termtek/Documents/GitHub/spec-kit/templates/commands
+📁 Spec-Kit 路徑: /path/to/spec-kit
+📁 命令目錄: /path/to/spec-kit/templates/commands
 
 ℹ 找到 8 個 Spec-Kit 命令
 ℹ 配置檔案中已知 8 個命令
@@ -401,7 +401,7 @@ $ ~/sync-commands.sh status
 同步狀態
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📁 Spec-Kit 路徑: /Users/termtek/Documents/GitHub/spec-kit
+📁 Spec-Kit 路徑: /path/to/spec-kit
 📁 命令目錄: .claude/commands
 
 ⚙️  配置檔案: .claude/.speckit-sync.json
@@ -487,10 +487,10 @@ $ ~/sync-commands.sh diff implement.md
 比較: implement.md
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 本地: .claude/commands/implement.md
-📄 spec-kit: /Users/termtek/Documents/GitHub/spec-kit/templates/commands/implement.md
+📄 spec-kit: /path/to/spec-kit/templates/commands/implement.md
 
 --- .claude/commands/implement.md
-+++ /Users/termtek/Documents/GitHub/spec-kit/templates/commands/implement.md
++++ /path/to/spec-kit/templates/commands/implement.md
 @@ -5,7 +5,7 @@
 
 -## Old feature description

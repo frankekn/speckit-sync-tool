@@ -7,7 +7,7 @@
 ### 選項 1：全新安裝
 
 ```bash
-cd /Users/termtek/Documents/GitHub/speckit-sync-tool
+cd /path/to/speckit-sync-tool
 
 # 使用新版本
 mv sync-commands-enhanced.sh sync-commands.sh

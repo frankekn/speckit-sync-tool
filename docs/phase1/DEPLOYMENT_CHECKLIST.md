@@ -62,7 +62,7 @@
 
 ```bash
 # 確認在正確目錄
-cd /Users/termtek/Documents/GitHub/speckit-sync-tool
+cd /path/to/speckit-sync-tool
 
 # 確認所有檔案存在
 ls -lh sync-commands-enhanced.sh
@@ -165,13 +165,13 @@ cd /tmp/test-project-$$
 mkdir -p /tmp/test-project-$$
 
 # 初始化
-/Users/termtek/Documents/GitHub/speckit-sync-tool/sync-commands.sh init
+/path/to/speckit-sync-tool/sync-commands.sh init
 
 # 檢查配置版本
 grep '"version"' .claude/.speckit-sync.json
 
 # 列出命令
-/Users/termtek/Documents/GitHub/speckit-sync-tool/sync-commands.sh list
+/path/to/speckit-sync-tool/sync-commands.sh list
 
 # 清理
 cd /tmp
@@ -249,7 +249,7 @@ bash --version
 **解決：**
 ```bash
 # 設定正確路徑
-export SPECKIT_PATH=/Users/termtek/Documents/GitHub/spec-kit
+export SPECKIT_PATH=/path/to/spec-kit
 
 # 或在腳本中修改預設值
 ```
@@ -296,7 +296,7 @@ cd /tmp/speckit-sync-test-XXXXX
 
 ```bash
 # 檢查所有相關檔案
-cd /Users/termtek/Documents/GitHub/speckit-sync-tool
+cd /path/to/speckit-sync-tool
 ls -lh sync-commands.sh
 ls -lh test-phase1.sh
 ls -lh PHASE1_*.md

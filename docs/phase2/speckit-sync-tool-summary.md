@@ -60,7 +60,7 @@ speckit-sync help                     # 使用說明
 ## 📦 交付文件
 
 ### 1. 主程式
-- `/Users/termtek/Documents/GitHub/spec-kit/speckit-sync`
+- `/path/to/spec-kit/speckit-sync`
   - 完整的 bash 實作
   - 可執行權限已設定
   - 版本：2.0.0
@@ -82,11 +82,11 @@ speckit-sync help                     # 使用說明
   - 測試策略
 
 ### 3. 測試腳本
-- `/Users/termtek/Documents/GitHub/spec-kit/test-speckit-sync.sh`
+- `/path/to/spec-kit/test-speckit-sync.sh`
   - 12 個測試案例
   - 自動化測試框架
 
-- `/Users/termtek/Documents/GitHub/spec-kit/demo-speckit-sync.sh`
+- `/path/to/spec-kit/demo-speckit-sync.sh`
   - 功能示範腳本
   - 快速驗證工具
 
