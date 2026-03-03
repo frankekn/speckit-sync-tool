@@ -2349,7 +2349,7 @@ ${CYAN}${BOLD}SpecKit Sync - 整合版同步工具 v${VERSION}${NC}
 環境變數:
     SPECKIT_PATH                 spec-kit 倉庫路徑 (預設: ../spec-kit)
     VERBOSITY                    輸出層級: quiet|normal|verbose|debug (預設: normal)
-    WORKSPACE_DIR                cleanup 批次掃描根目錄 (預設: ~/Documents/GitHub)
+    WORKSPACE_DIR                cleanup 批次掃描根目錄 (預設: 目前目錄)
     GITHUB_DIR                   WORKSPACE_DIR 的相容別名
 
 範例:
@@ -2474,7 +2474,7 @@ main() {
     local all_agents=false
     local cleanup_apply=false
     local cleanup_all_projects_flag=false
-    local cleanup_workspace_dir="${WORKSPACE_DIR:-${GITHUB_DIR:-$HOME/Documents/GitHub}}"
+    local cleanup_workspace_dir="${WORKSPACE_DIR:-${GITHUB_DIR:-$PWD}}"
     local project_root_override=""
 
     # 解析參數

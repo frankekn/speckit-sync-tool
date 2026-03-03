@@ -20,7 +20,7 @@ set -e
 VERBOSITY="${VERBOSITY:-normal}"  # quiet|normal|verbose|debug
 
 # GitHub directory (adjust according to your environment)
-GITHUB_DIR="${GITHUB_DIR:-$HOME/Documents/GitHub}"
+GITHUB_DIR="${GITHUB_DIR:-$PWD}"
 
 # spec-kit path
 SPECKIT_PATH="${SPECKIT_PATH:-$GITHUB_DIR/spec-kit}"
@@ -636,7 +636,7 @@ Options:
     --help              Show this help message
 
 Environment variables:
-    GITHUB_DIR          GitHub projects directory (default: ~/Documents/GitHub)
+    GITHUB_DIR          GitHub projects directory (default: current directory)
     SPECKIT_PATH        spec-kit repository path (default: \$GITHUB_DIR/spec-kit)
     VERBOSITY           Output level: quiet|normal|verbose|debug (default: normal)
 
