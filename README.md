@@ -1,6 +1,6 @@
 # Spec-Kit Sync Tool
 
-> **Language**: [English](README.md) | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
+> **Language**: [English](README.md) | [Traditional Chinese](README.zh-TW.md) | [Simplified Chinese](README.zh-CN.md)
 
 Automated tool to sync [GitHub spec-kit](https://github.com/github/spec-kit) commands and templates across multiple projects with support for 13+ AI coding agents.
 
